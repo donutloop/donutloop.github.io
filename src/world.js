@@ -222,6 +222,7 @@ const cloudGeom = new THREE.BoxGeometry(1, 1, 1);
 function createProceduralCloud(x, z, chunkGroup) {
     // Massive clouds high up
     const cloudGroup = new THREE.Group();
+    cloudGroup.userData = { isCloud: true, speed: 2 + Math.random() * 10 }; // [NEW] Tag for animation
     const height = 450 + Math.random() * 150; // 450 to 600
     cloudGroup.position.set(x, height, z);
 

@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { initScene, animate } from './scene.js';
-import { createWorld } from './world.js?v=WORLDLOOP_5.15.32';
-import { Player } from './player.js?v=WORLDLOOP_5.15.32';
-import { TrafficSystem } from './traffic.js?v=WORLDLOOP_5.15.32';
-import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.15.32';
-import { PedestrianSystem } from './pedestrians.js?v=WORLDLOOP_5.15.32';
-import { ParkingSystem } from './parking.js?v=WORLDLOOP_5.15.32';
+import { createWorld } from './world.js?v=WORLDLOOP_5.15.35';
+import { Player } from './player.js?v=WORLDLOOP_5.15.35';
+import { TrafficSystem } from './traffic.js?v=WORLDLOOP_5.15.35';
+import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.15.35';
+import { PedestrianSystem } from './pedestrians.js?v=WORLDLOOP_5.15.35';
+import { ParkingSystem } from './parking.js?v=WORLDLOOP_5.15.35';
 import { AirplaneSystem } from './airplanes.js';
 import { EffectSystem } from './effects.js';
 import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
-import { ChunkManager } from './chunk_manager.js?v=WORLDLOOP_5.15.32';
+import { ChunkManager } from './chunk_manager.js?v=WORLDLOOP_5.15.35';
 
 let player;
 let prevTime = performance.now();
@@ -134,7 +134,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.15.32 - FINAL POLISH';
+        verDiv.innerHTML = 'v5.15.35 - GIT READY';
         document.body.appendChild(verDiv);
 
         animate(() => {
@@ -145,6 +145,7 @@ async function init() {
             try {
                 if (chunkManager) {
                     chunkManager.update();
+                    chunkManager.updateClouds(delta); // [NEW] Animate infinite clouds
                     // Update player colliders continuously as chunks load/unload
                     if (player) {
                         player.colliders = chunkManager.getColliders();
