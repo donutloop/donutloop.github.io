@@ -14,7 +14,7 @@ export class ChunkManager {
 
         this.chunks = new Map(); // "x,z" -> chunkData
         this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
-        this.renderDistance = 4; // chunks radius
+        this.renderDistance = 3; // chunks radius (Reduced for performance)
 
         // Seed randomness
         this.noise = SimplexNoise;

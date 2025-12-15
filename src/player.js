@@ -509,7 +509,12 @@ export class Player {
         if (!this.currentCar) return false;
 
         this.currentCar.mesh.updateMatrixWorld();
-        const carBox = new THREE.Box3().setFromObject(this.currentCar.mesh);
+        let carBox;
+        if (this.currentCar.mesh.userData.localBox) {
+            carBox = this.currentCar.mesh.userData.localBox.clone().applyMatrix4(this.currentCar.mesh.matrixWorld);
+        } else {
+            carBox = new THREE.Box3().setFromObject(this.currentCar.mesh);
+        }
 
         // 1. Check Buildings (Static Colliders)
         if (this.colliders) {
@@ -527,7 +532,12 @@ export class Player {
                 if (dist > 25) continue;
 
                 otherCar.mesh.updateMatrixWorld();
-                const otherBox = new THREE.Box3().setFromObject(otherCar.mesh);
+                let otherBox;
+                if (otherCar.mesh.userData.localBox) {
+                    otherBox = otherCar.mesh.userData.localBox.clone().applyMatrix4(otherCar.mesh.matrixWorld);
+                } else {
+                    otherBox = new THREE.Box3().setFromObject(otherCar.mesh);
+                }
 
                 // HYBRID COLLISION: Box OR Sphere (Distance < 3.5)
                 if (carBox.intersectsBox(otherBox) || dist < 3.5) {
@@ -579,7 +589,12 @@ export class Player {
                 if (dist > 25) continue;
 
                 otherCar.updateMatrixWorld();
-                const otherBox = new THREE.Box3().setFromObject(otherCar);
+                let otherBox;
+                if (otherCar.userData.localBox) {
+                    otherBox = otherCar.userData.localBox.clone().applyMatrix4(otherCar.matrixWorld);
+                } else {
+                    otherBox = new THREE.Box3().setFromObject(otherCar);
+                }
 
                 if (carBox.intersectsBox(otherBox) || dist < 3.5) {
                     console.log("HIT PARKED! (Dist: " + dist.toFixed(2) + ")");
@@ -744,7 +759,11 @@ export class Player {
             const carBox = new THREE.Box3();
             for (const car of this.trafficSystem.cars) {
                 // Moving cars need dynamic box update
-                carBox.setFromObject(car.mesh);
+                if (car.mesh.userData.localBox) {
+                    carBox.copy(car.mesh.userData.localBox).applyMatrix4(car.mesh.matrixWorld);
+                } else {
+                    carBox.setFromObject(car.mesh);
+                }
                 // Expand slightly for safety
                 carBox.expandByScalar(0.2);
 

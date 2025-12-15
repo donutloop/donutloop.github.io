@@ -84,7 +84,11 @@ export class ParkingSystem {
         for (const cars of this.chunkCars.values()) {
             cars.forEach(car => {
                 if (!car.isPlayerDriven) { // Skip if player is driving this car
-                    colliders.push(new THREE.Box3().setFromObject(car));
+                    if (car.userData.localBox) {
+                        colliders.push(car.userData.localBox.clone().applyMatrix4(car.matrixWorld));
+                    } else {
+                        colliders.push(new THREE.Box3().setFromObject(car));
+                    }
                 }
             });
         }
@@ -205,6 +209,10 @@ export class ParkingSystem {
 
                     if (!this.isBlocked(box, list)) {
                         const car = createCarMesh(type);
+
+                        // Optimize: Cache local bounds BEFORE moving
+                        car.userData.localBox = new THREE.Box3().setFromObject(car);
+
                         car.position.set(px, 0, pz);
                         car.rotation.y = rot;
                         car.userData.health = 100; // Init Health

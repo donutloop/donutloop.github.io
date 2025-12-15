@@ -45,6 +45,12 @@ export class TrafficSystem {
             const type = getRandomCarType();
             const carGroup = createCarMesh(type);
 
+            // Optimization: Cache local bounding box to avoid per-frame traversal
+            // This box is in local space (relative to car origin)
+            if (!carGroup.userData.localBox) {
+                carGroup.userData.localBox = new THREE.Box3().setFromObject(carGroup);
+            }
+
             const state = this.spawnCarInChunk(carGroup, xOffset, zOffset, chunkSize, chunkCarsList, allowedAxes);
 
             if (state) {
@@ -403,7 +409,11 @@ export class TrafficSystem {
         for (const cars of this.chunkCars.values()) {
             cars.forEach(car => {
                 if (!car.isPlayerDriven) {
-                    colliders.push(new THREE.Box3().setFromObject(car.mesh));
+                    if (car.mesh.userData.localBox) {
+                        colliders.push(car.mesh.userData.localBox.clone().applyMatrix4(car.mesh.matrixWorld));
+                    } else {
+                        colliders.push(new THREE.Box3().setFromObject(car.mesh));
+                    }
                 }
             });
         }

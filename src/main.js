@@ -133,7 +133,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.15.38';
+        verDiv.innerHTML = 'v5.16.0';
         document.body.appendChild(verDiv);
 
         animate(() => {
