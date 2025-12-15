@@ -86,6 +86,9 @@ async function init() {
         player.trafficSystem = trafficSystem;
         player.parkingSystem = parkingSystem;
 
+        // Initialize Traffic Dependencies
+        trafficSystem.setDependencies(player, parkingSystem);
+
         // Weather
         weatherSystem = new WeatherSystem(scene, worldData.directionalLight, worldData.ambientLight, worldData.materials);
 
@@ -115,15 +118,16 @@ async function init() {
         document.body.appendChild(weatherInfo);
 
         // Version Indicator to debug cache issues
+        // Version Indicator to debug cache issues
         const verDiv = document.createElement('div');
         verDiv.style.position = 'absolute';
-        verDiv.style.top = '10px';
+        verDiv.style.bottom = '10px';
         verDiv.style.right = '10px';
         verDiv.style.color = 'white';
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v4.3 - NYC STYLE CITY';
+        verDiv.innerHTML = 'v4.4 - WIDE STREETS';
         document.body.appendChild(verDiv);
 
         animate(() => {

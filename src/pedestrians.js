@@ -99,8 +99,6 @@ export class PedestrianSystem {
 
     spawnPedInChunk(group, chunkX, chunkZ, blockSize) {
         // Pick one of the 4 corners
-        // Sidewalks are 10x10, centered at +/- 12.
-        // Bounds: 7 to 17.
         const cornerIdx = Math.floor(Math.random() * 4);
         const signs = [
             { x: -1, z: -1 }, // Top-Left
@@ -110,41 +108,55 @@ export class PedestrianSystem {
         ];
         const sign = signs[cornerIdx];
 
+        // Dynamic Geometry Calculations
+        const roadHalf = this.roadWidth / 2;
+        const cornerSize = blockSize / 2;
+
+        // Center of the sidewalk area (per quadrant)
+        const sidewalkCenter = roadHalf + cornerSize / 2;
+
+        // Bounds for this quadrant (Positive)
+        const minBound = roadHalf; // Start of sidewalk (Edge of road)
+        const maxBound = roadHalf + cornerSize; // End of sidewalk
+
         // Building Info (Matches world.js logic)
-        // cornerSize = (34 - 14) / 2 = 10.
-        // Building width = 10 - 4 = 6.
-        // Building center = +/- 12.
-        const buildingCenterX = 12 * sign.x;
-        const buildingCenterZ = 12 * sign.z;
-        const buildingHalfWidth = 3.2; // 3.0 actual, 3.2 for safety margin
+        // Building width = cornerSize - 4.
+        // Building Center = sidewalkCenter.
+        const buildingWidth = cornerSize - 4;
+        const buildingHalfWidth = (buildingWidth / 2) + 0.2; // +0.2 margin
+
+        const buildingCenterX = sidewalkCenter * sign.x;
+        const buildingCenterZ = sidewalkCenter * sign.z;
 
         // Spawn logic: Try to find a spot OUTSIDE the building box
         let localX, localZ;
         let safe = false;
 
-        for (let i = 0; i < 10; i++) {
-            // Random pos within corner (7 to 17) -> Center +/- 5
-            // 12 +/- 5
-            const lx = 12 + (Math.random() - 0.5) * 10;
-            const lz = 12 + (Math.random() - 0.5) * 10;
+        for (let i = 0; i < 15; i++) {
+            // Random within bounds
+            const rawX = minBound + Math.random() * cornerSize;
+            const rawZ = minBound + Math.random() * cornerSize;
+
+            const lx = rawX * sign.x;
+            const lz = rawZ * sign.z;
 
             // Check against building hole
-            const distBx = Math.abs(lx - 12);
-            const distBz = Math.abs(lz - 12);
+            const distBx = Math.abs(lx - buildingCenterX);
+            const distBz = Math.abs(lz - buildingCenterZ);
 
-            // If NOT inside building (inside = both < 3)
-            if (!(distBx < 3.5 && distBz < 3.5)) {
-                localX = lx * sign.x;
-                localZ = lz * sign.z;
+            // If NOT inside building
+            if (!(distBx < buildingHalfWidth && distBz < buildingHalfWidth)) {
+                localX = lx;
+                localZ = lz;
                 safe = true;
                 break;
             }
         }
 
         if (!safe) {
-            // Fallback: spawn on the outer rim (e.g. 16)
-            localX = 16 * sign.x;
-            localZ = 16 * sign.z;
+            // Fallback: spawn on the outer rim
+            localX = (maxBound - 1.0) * sign.x;
+            localZ = (maxBound - 1.0) * sign.z;
         }
 
         group.position.set(chunkX + localX, 0, chunkZ + localZ);
@@ -156,10 +168,10 @@ export class PedestrianSystem {
         // Store bounds for this ped
         return {
             direction,
-            minX: sign.x > 0 ? 7 : -17,
-            maxX: sign.x > 0 ? 17 : -7,
-            minZ: sign.z > 0 ? 7 : -17,
-            maxZ: sign.z > 0 ? 17 : -7,
+            minX: sign.x > 0 ? minBound : -maxBound,
+            maxX: sign.x > 0 ? maxBound : -minBound,
+            minZ: sign.z > 0 ? minBound : -maxBound,
+            maxZ: sign.z > 0 ? maxBound : -minBound,
             // Building collision data
             buildingCenterX,
             buildingCenterZ,

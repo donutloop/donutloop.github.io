@@ -287,7 +287,7 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
     }
 }
 
-export function createCityChunk(xPos, zPos, size) {
+export function createCityChunk(xPos, zPos, size, roadWidth = 14) {
     const chunkGroup = new THREE.Group();
     const colliders = [];
 
@@ -313,8 +313,12 @@ export function createCityChunk(xPos, zPos, size) {
     chunkGroup.add(laneV);
 
     // 3. Sidewalks & Buildings (4 Corners)
-    const cornerSize = (size - 14) / 2; // ~10
-    const offset = 7 + cornerSize / 2; // 12
+    // Dynamic sizing based on roadWidth
+    const cornerSize = (size - roadWidth) / 2;
+    const offset = (roadWidth + cornerSize) / 2;
+
+    // Safety check
+    if (cornerSize < 1) return { mesh: chunkGroup, colliders: colliders };
 
     const corners = [
         { x: -offset, z: -offset },
@@ -333,8 +337,10 @@ export function createCityChunk(xPos, zPos, size) {
 
         // NYC Building
         if (Math.random() > 0.2) { // 80% density
-            const width = cornerSize - 4; // 6
-            createNYCBuilding(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders);
+            const width = cornerSize - 4; // Margin
+            if (width > 2) {
+                createNYCBuilding(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders);
+            }
         }
     });
 
@@ -396,8 +402,8 @@ export async function createWorld(scene) {
     // We return empty world data, main.js will use ChunkManager
     return {
         citySize: 1000, // Virtual size
-        blockSize: 20, // Was 34 (Incorrect, 34 is total size)
-        roadWidth: 14,
+        blockSize: 30, // 30 + 24 = 54 total chunk size
+        roadWidth: 24,
         colliders: [], // No static colliders upfront
         cubes: [], // Empty for now, NMS world doesn't have static collectibles yet
         materials: matCache,

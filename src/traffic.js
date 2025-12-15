@@ -122,11 +122,40 @@ export class TrafficSystem {
         return null;
     }
 
+    setDependencies(player, parkingSystem) {
+        this.player = player;
+        this.parkingSystem = parkingSystem;
+    }
+
     update(delta) {
+        // Collect potential obstacles
+        // Optimization: For N=30-50 cars, a flat check is okay, but we can do better by only checking near objects.
+        // For now, simple list is fine.
+        let dynamicObstacles = [];
+        if (this.parkingSystem) {
+            dynamicObstacles = dynamicObstacles.concat(this.parkingSystem.cars);
+        }
+        // Player
+        if (this.player && !this.player.isDriving) {
+            // Treat player as a small object
+            dynamicObstacles.push({
+                isPlayer: true,
+                position: this.player.camera.position,
+                isObject: true // flag to distinguish from meshes if needed
+            });
+        }
+
         // Update all active chunks
         for (const cars of this.chunkCars.values()) {
             cars.forEach(car => {
                 if (car.isPlayerDriven) return;
+
+                // Collision Check
+                if (this.checkBlocked(car, dynamicObstacles)) {
+                    // Brake / Stop
+                    return;
+                }
+
                 // Move
                 const move = car.direction * this.carSpeed * delta;
 
@@ -147,6 +176,88 @@ export class TrafficSystem {
                 }
             });
         }
+    }
+
+    checkBlocked(car, externalObstacles) {
+        const checkDist = 12.0; // Distance to check ahead
+        const laneWidth = 2.5; // Lateral leeway (cars are ~2 wide)
+
+        const carPos = car.mesh.position;
+
+        // Helper to check a list of potential obstacles
+        const checkList = (list) => {
+            for (const other of list) {
+                if (other === car || other === car.mesh) continue; // Skip self
+
+                // Setup other pos
+                // 'other' might be:
+                // 1. Another traffic car (wrapper object with .mesh) -> NO, loop iterates wrappers in this.cars? 
+                //    Wait, externalObstacles has objects with .position?
+                //    Let's standardize interactions.
+
+                let otherPos;
+                if (other.isPlayer) {
+                    otherPos = other.position;
+                } else if (other.mesh) {
+                    // Traffic car wrapper or similar
+                    otherPos = other.mesh.position;
+                } else if (other.position) {
+                    // Raw mesh (e.g. parked car or simple object)
+                    otherPos = other.position;
+                } else {
+                    continue;
+                }
+
+                // Distance check (Manhattan or Euclidian? Simple Axis checks are better)
+                // Use relative coordinates based on car direction
+
+                let forwardDist = 0;
+                let lateralDist = 0;
+
+                if (car.axis === 'x') {
+                    // Moving along X
+                    // lateral is delta Z
+                    lateralDist = Math.abs(otherPos.z - carPos.z);
+
+                    // forward is delta X taking direction into account
+                    // if dir is 1, otherX - carX should be > 0
+                    const dx = otherPos.x - carPos.x;
+                    if (car.direction === 1) {
+                        forwardDist = dx;
+                    } else {
+                        forwardDist = -dx;
+                    }
+
+                } else {
+                    // Moving along Z
+                    // lateral is delta X
+                    lateralDist = Math.abs(otherPos.x - carPos.x);
+
+                    // forward is delta Z
+                    const dz = otherPos.z - carPos.z;
+                    if (car.direction === 1) {
+                        forwardDist = dz;
+                    } else {
+                        forwardDist = -dz;
+                    }
+                }
+
+                // Check Bounds
+                if (forwardDist > 0 && forwardDist < checkDist && lateralDist < laneWidth) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // 1. Check other Traffic
+        // Flattened list 'this.cars' contains all active traffic wrappers
+        if (checkList(this.cars)) return true;
+
+        // 2. Check Parked/Player
+        if (checkList(externalObstacles)) return true;
+
+        return false;
     }
 
     getColliders() {

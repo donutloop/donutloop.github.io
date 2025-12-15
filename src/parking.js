@@ -102,9 +102,10 @@ export class ParkingSystem {
             // Random pos within zone
             const offsetAlongRoad = zone.start + Math.random() * (zone.end - zone.start);
 
-            // Parking offset from center line (Curb is at 7)
-            // Park at +/- 6.0 (flush with sidewalk edge 7 - 1.0 width)
-            const sideOffset = Math.random() > 0.5 ? 6.0 : -6.0;
+            // Parking offset from center line (Curb is at roadWidth/2)
+            // Park at +/- (roadWidth/2 - 1.0)
+            const parkOffset = this.roadWidth / 2 - 1.0;
+            const sideOffset = Math.random() > 0.5 ? parkOffset : -parkOffset;
 
             if (isXRow) {
                 // Road runs along X axis.

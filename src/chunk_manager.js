@@ -69,7 +69,7 @@ export class ChunkManager {
         let chunkData;
 
         if (isCity) {
-            chunkData = createCityChunk(xPos, zPos, this.chunkSize);
+            chunkData = createCityChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth);
 
             // Spawn City Population
             if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz);
