@@ -337,8 +337,9 @@ export class Player {
     updateCarPhysics(delta) {
         if (!this.currentCar) return;
 
-        const maxSpeed = 100; // Was 40 - Massive boost
-        const acceleration = 80; // Was 30 - Snappier
+        const stats = this.getCarStats(this.currentCar.mesh.userData.type || 'sedan');
+        const maxSpeed = stats.maxSpeed;
+        const acceleration = stats.acceleration;
         const friction = 10;
         const turnSpeed = 2.0;
 
@@ -555,5 +556,14 @@ export class Player {
         }
 
         return false;
+    }
+    getCarStats(type) {
+        switch (type) {
+            case 'sport': return { maxSpeed: 160, acceleration: 120 };
+            case 'sedan': return { maxSpeed: 110, acceleration: 80 };
+            case 'suv': return { maxSpeed: 90, acceleration: 70 };
+            case 'truck': return { maxSpeed: 70, acceleration: 50 };
+            default: return { maxSpeed: 100, acceleration: 80 };
+        }
     }
 }

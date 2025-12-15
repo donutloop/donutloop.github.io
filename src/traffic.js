@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCarMesh } from './car_models.js';
-import { disposeCar } from './utils.js';
+import { disposeCar, getRandomCarType } from './utils.js';
 
 export class TrafficSystem {
     constructor(scene, citySize, blockSize, roadWidth) {
@@ -10,8 +10,19 @@ export class TrafficSystem {
         this.roadWidth = roadWidth;
         this.chunkCars = new Map();
         this.cars = []; // Flat list for easy loop
-        this.carSpeed = 10;
+        // this.carSpeed = 10; // Removed global speed
         // No init() call here, wait for ChunkManager
+    }
+
+    // [NEW] Speed definitions
+    getSpeedForType(type) {
+        switch (type) {
+            case 'sport': return 22;
+            case 'sedan': return 15;
+            case 'suv': return 12;
+            case 'truck': return 8;
+            default: return 10;
+        }
     }
 
     loadChunk(cx, cz) {
@@ -30,17 +41,22 @@ export class TrafficSystem {
         const zOffset = cz * chunkSize;
 
         for (let i = 0; i < numCars; i++) {
-            const type = ['sedan', 'suv', 'truck', 'sport'][Math.floor(Math.random() * 4)];
+            const type = getRandomCarType();
             const carGroup = createCarMesh(type);
 
             const state = this.spawnCarInChunk(carGroup, xOffset, zOffset, chunkSize, chunkCarsList);
 
             if (state && (Math.abs(state.pos.x - xOffset) > 7 || Math.abs(state.pos.z - zOffset) > 7)) {
                 this.scene.add(carGroup);
+
+                // Assign speed
+                const speed = this.getSpeedForType(type);
+
                 chunkCarsList.push({
                     mesh: carGroup,
                     axis: state.axis,
                     direction: state.direction,
+                    speed: speed, // [NEW] Individual speed
                     // Bounds for this car to despawn/wrap?
                     // actually simpler to just wrap within whole chunk 34x34
                     chunkX: xOffset,
@@ -164,7 +180,7 @@ export class TrafficSystem {
                 }
 
                 // Move
-                const move = car.direction * this.carSpeed * delta;
+                const move = car.direction * car.speed * delta;
 
                 if (car.axis === 'x') {
                     car.mesh.position.x += move;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCarMesh } from './car_models.js';
-import { disposeCar } from './utils.js';
+import { disposeCar, getRandomCarType } from './utils.js';
 
 export class ParkingSystem {
     constructor(scene, citySize, blockSize, roadWidth) {
@@ -98,7 +98,7 @@ export class ParkingSystem {
         safeZones.forEach(zone => {
             if (Math.random() < 0.4) return; // 60% chance to spawn in a zone
 
-            const type = ['sedan', 'suv', 'truck', 'sport'][Math.floor(Math.random() * 4)];
+            const type = getRandomCarType();
             const car = createCarMesh(type);
 
             // Random pos within zone

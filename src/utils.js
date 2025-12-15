@@ -28,3 +28,16 @@ export function disposeCar(carGroup) {
         }
     });
 }
+
+export function getRandomCarType() {
+    const r = Math.random();
+    // Sedan: 50% (0.0 - 0.5)
+    // SUV: 30% (0.5 - 0.8)
+    // Truck: 15% (0.8 - 0.95)
+    // Sport: 5% (0.95 - 1.0)
+
+    if (r < 0.5) return 'sedan';
+    if (r < 0.8) return 'suv';
+    if (r < 0.95) return 'truck';
+    return 'sport';
+}
