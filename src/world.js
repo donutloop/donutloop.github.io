@@ -394,10 +394,10 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
 
         // Building
         if (Math.random() > 0.1) {
-            const margin = 10;
+            const margin = 12;
             const bw = cornerSize - margin;
 
-            if (bw > 3) {
+            if (bw > 8) {
                 // Decide Style
                 const r = Math.random();
                 let style = 'modern';
@@ -443,9 +443,9 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
     };
 
     corners.forEach(Corner => {
-        const margin = 10;
+        const margin = 12;
         const width = cornerSize - margin;
-        if (cornerSize > 6) {
+        if (cornerSize > 8) {
             // Pick random unique sides to prevent overlap
             const sides = [0, 1, 2, 3];
             // Shuffle
@@ -610,8 +610,8 @@ export async function createWorld(scene) {
     scene.add(directionalLight);
 
     return {
-        roadWidth: 14,
-        blockSize: 40,
+        roadWidth: 26,
+        blockSize: 70,
         citySize: 1000,
         directionalLight,
         ambientLight,

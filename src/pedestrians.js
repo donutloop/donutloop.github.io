@@ -7,17 +7,21 @@ export class PedestrianSystem {
         this.blockSize = blockSize;
         this.roadWidth = roadWidth;
         this.chunkPeds = new Map();
-        this.peds = []; // [NEW] Flat list
+        this.peds = []; // Flat list
         // Settings
         this.maxSpeed = 2.0;
         this.maxForce = 5.0; // Steering force limit
 
-        // Shared Geometries/Materials
-        this.bodyGeom = new THREE.BoxGeometry(0.5, 0.8, 0.3);
-        this.headGeom = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-        this.legGeom = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-        this.headMat = new THREE.MeshStandardMaterial({ color: 0xffccaa });
-        this.legMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        // Geometry Cache
+        this.geomBody = new THREE.BoxGeometry(0.45, 0.75, 0.25); // Slender torso
+        this.geomHead = new THREE.BoxGeometry(0.25, 0.25, 0.25);
+        this.geomLimb = new THREE.BoxGeometry(0.12, 0.75, 0.12); // Arms/Legs
+        this.geomShoe = new THREE.BoxGeometry(0.14, 0.1, 0.22);
+        this.geomHair = new THREE.BoxGeometry(0.27, 0.1, 0.27); // Simple hair cap
+
+        // Mat Cache (Colors handled per instance usually, but standard materials here)
+        this.matSkin = new THREE.MeshStandardMaterial({ color: 0xffccaa });
+        this.matDark = new THREE.MeshStandardMaterial({ color: 0x222222 });
     }
 
     setDependencies(trafficLightSystem, parkingSystem) {
@@ -49,8 +53,7 @@ export class PedestrianSystem {
                 chunkSize: chunkSize,
                 bounds: state.bounds,
                 legAnimTimer: Math.random() * 10,
-                leftLeg: group.children[2],
-                rightLeg: group.children[3],
+                limbs: group.userData.limbs, // New Structure
                 waitTimer: 0,
                 ragdollTimer: 0
             };
@@ -75,26 +78,96 @@ export class PedestrianSystem {
 
     createPedMesh() {
         const group = new THREE.Group();
-        const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.4);
-        const mat = new THREE.MeshStandardMaterial({ color: color });
 
-        const body = new THREE.Mesh(this.bodyGeom, mat);
+        // Randomize Colors
+        const shirtColor = new THREE.Color().setHSL(Math.random(), 0.7, 0.4);
+        const pantsColor = new THREE.Color().setHSL(Math.random(), 0.5, 0.2);
+        const skinColor = new THREE.Color().setHSL(0.08, 0.6, 0.5 + Math.random() * 0.4); // Skin tone variety
+        const hairColor = new THREE.Color().setHSL(Math.random(), 0.5, 0.1 + Math.random() * 0.2); // Darker hairs usually
+
+        const matShirt = new THREE.MeshStandardMaterial({ color: shirtColor });
+        const matPants = new THREE.MeshStandardMaterial({ color: pantsColor });
+        const matSkinInstance = new THREE.MeshStandardMaterial({ color: skinColor });
+        const matHair = new THREE.MeshStandardMaterial({ color: hairColor });
+
+        // 1. Torso
+        const body = new THREE.Mesh(this.geomBody, matShirt);
         body.position.y = 1.0;
         body.castShadow = true;
         group.add(body);
 
-        const head = new THREE.Mesh(this.headGeom, this.headMat);
-        head.position.y = 1.6;
+        // 2. Head
+        const head = new THREE.Mesh(this.geomHead, matSkinInstance);
+        head.position.y = 1.55;
         head.castShadow = true;
         group.add(head);
 
-        const leftLeg = new THREE.Mesh(this.legGeom, this.legMat);
-        leftLeg.position.set(-0.15, 0.4, 0);
-        group.add(leftLeg);
+        // 3. Hair (Cap)
+        const hair = new THREE.Mesh(this.geomHair, matHair);
+        hair.position.y = 1.7; // Top of head
+        hair.castShadow = true;
+        group.add(hair);
 
-        const rightLeg = new THREE.Mesh(this.legGeom, this.legMat);
-        rightLeg.position.set(0.15, 0.4, 0);
-        group.add(rightLeg);
+        // 4. Arms (Pivots at shoulders)
+        // Left Arm
+        const leftArmGroup = new THREE.Group();
+        leftArmGroup.position.set(-0.35, 1.35, 0); // Shoulder pos
+        const leftArm = new THREE.Mesh(this.geomLimb, matShirt); // Long sleeve
+        leftArm.position.y = -0.3; // Hang down
+        leftArm.castShadow = true;
+        leftArmGroup.add(leftArm);
+        // Hand
+        const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), matSkinInstance);
+        leftHand.position.y = -0.7;
+        leftArmGroup.add(leftHand);
+        group.add(leftArmGroup);
+
+        // Right Arm
+        const rightArmGroup = new THREE.Group();
+        rightArmGroup.position.set(0.35, 1.35, 0);
+        const rightArm = new THREE.Mesh(this.geomLimb, matShirt);
+        rightArm.position.y = -0.3;
+        rightArm.castShadow = true;
+        rightArmGroup.add(rightArm);
+        const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), matSkinInstance);
+        rightHand.position.y = -0.7;
+        rightArmGroup.add(rightHand);
+        group.add(rightArmGroup);
+
+        // 5. Legs
+        // Left Leg
+        const leftLegGroup = new THREE.Group();
+        leftLegGroup.position.set(-0.15, 0.65, 0); // Hip
+        const leftLeg = new THREE.Mesh(this.geomLimb, matPants);
+        leftLeg.position.y = -0.35;
+        leftLeg.castShadow = true;
+        leftLegGroup.add(leftLeg);
+        // Shoe
+        const leftShoe = new THREE.Mesh(this.geomShoe, this.matDark);
+        leftShoe.position.set(0, -0.75, 0.05); // Forward offset
+        leftLegGroup.add(leftShoe);
+        group.add(leftLegGroup);
+
+        // Right Leg
+        const rightLegGroup = new THREE.Group();
+        rightLegGroup.position.set(0.15, 0.65, 0);
+        const rightLeg = new THREE.Mesh(this.geomLimb, matPants);
+        rightLeg.position.y = -0.35;
+        rightLeg.castShadow = true;
+        rightLegGroup.add(rightLeg);
+        // Shoe
+        const rightShoe = new THREE.Mesh(this.geomShoe, this.matDark);
+        rightShoe.position.set(0, -0.75, 0.05);
+        rightLegGroup.add(rightShoe);
+        group.add(rightLegGroup);
+
+        // Return with references to animatable parts
+        group.userData.limbs = {
+            leftArm: leftArmGroup,
+            rightArm: rightArmGroup,
+            leftLeg: leftLegGroup,
+            rightLeg: rightLegGroup
+        };
 
         return group;
     }
@@ -212,13 +285,29 @@ export class PedestrianSystem {
                 }
 
                 // Animation
+                // Animation
                 if (ped.velocity.lengthSq() > 0.1) {
-                    ped.legAnimTimer += delta * 10;
-                    ped.leftLeg.rotation.x = Math.sin(ped.legAnimTimer) * 0.5;
-                    ped.rightLeg.rotation.x = Math.sin(ped.legAnimTimer + Math.PI) * 0.5;
+                    ped.legAnimTimer += delta * 12; // Faster walk
+                    const angle = Math.sin(ped.legAnimTimer);
+
+                    // Legs
+                    ped.limbs.leftLeg.rotation.x = angle * 0.6;
+                    ped.limbs.rightLeg.rotation.x = -angle * 0.6;
+
+                    // Arms (Opposite)
+                    ped.limbs.leftArm.rotation.x = -angle * 0.6;
+                    ped.limbs.rightArm.rotation.x = angle * 0.6;
+
+                    // Bobbing
+                    ped.mesh.position.y = Math.abs(Math.sin(ped.legAnimTimer * 2)) * 0.05;
+
                 } else {
-                    ped.leftLeg.rotation.x = 0;
-                    ped.rightLeg.rotation.x = 0;
+                    // Idle Stand
+                    ped.limbs.leftLeg.rotation.x = 0;
+                    ped.limbs.rightLeg.rotation.x = 0;
+                    ped.limbs.leftArm.rotation.x = 0;
+                    ped.limbs.rightArm.rotation.x = 0;
+                    ped.mesh.position.y = 0;
                 }
             });
         }
