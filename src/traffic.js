@@ -56,8 +56,12 @@ export class TrafficSystem {
                     mesh: carGroup,
                     axis: state.axis,
                     direction: state.direction,
-                    speed: speed, // [NEW] Individual speed
-                    // Bounds for this car to despawn/wrap?
+                    speed: speed,
+                    // Physics State
+                    velocity: new THREE.Vector3(),
+                    angularVelocity: 0,
+                    stunned: 0,
+                    health: 100,
                     // actually simpler to just wrap within whole chunk 34x34
                     chunkX: xOffset,
                     chunkZ: zOffset,
@@ -144,10 +148,11 @@ export class TrafficSystem {
         return null;
     }
 
-    setDependencies(player, parkingSystem, trafficLightSystem) {
+    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem) {
         this.player = player;
         this.parkingSystem = parkingSystem;
-        this.trafficLightSystem = trafficLightSystem; // [NEW]
+        this.trafficLightSystem = trafficLightSystem;
+        this.effectSystem = effectSystem;
     }
 
     update(delta) {
@@ -173,6 +178,36 @@ export class TrafficSystem {
             cars.forEach(car => {
                 if (car.isPlayerDriven) return;
 
+                // 1. PHYSICS STATE (Crash Reaction)
+                if (car.stunned > 0) {
+                    car.stunned -= delta;
+
+                    // Move
+                    car.mesh.position.add(car.velocity.clone().multiplyScalar(delta));
+
+                    // Rotate
+                    car.mesh.rotation.y += car.angularVelocity * delta;
+
+                    // Friction
+                    car.velocity.multiplyScalar(0.95);
+                    car.angularVelocity *= 0.95;
+
+                    // Stop check
+                    if (car.velocity.length() < 0.1) {
+                        car.stunned = 0; // Recover? Or stay dead?
+                        // If health is low, stay disabled
+                        if (car.health <= 0) car.stunned = 999;
+                    }
+
+                    // Effects
+                    if (this.effectSystem && Math.random() < 0.1) {
+                        if (car.health < 20) this.effectSystem.createFireEffect(car.mesh);
+                        else if (car.health < 50) this.effectSystem.createSmokeEffect(car.mesh);
+                    }
+                    return; // Skip AI
+                }
+
+                // 2. AI DRIVING
                 // Collision Check
                 if (this.checkBlocked(car, dynamicObstacles)) {
                     // Brake / Stop

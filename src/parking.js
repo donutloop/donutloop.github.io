@@ -11,6 +11,12 @@ export class ParkingSystem {
         this.chunkCars = new Map(); // "cx,cz" -> Array of car meshes (or objects)
         this.cars = [];
         // No init loop
+        this.cars = [];
+        this.effectSystem = null;
+    }
+
+    setDependencies(effectSystem) {
+        this.effectSystem = effectSystem;
     }
 
     loadChunk(cx, cz) {
@@ -201,6 +207,7 @@ export class ParkingSystem {
                         const car = createCarMesh(type);
                         car.position.set(px, 0, pz);
                         car.rotation.y = rot;
+                        car.userData.health = 100; // Init Health
                         this.scene.add(car);
                         list.push(car);
                     }
@@ -250,6 +257,26 @@ export class ParkingSystem {
     }
 
     update(delta) {
-        // Static
+        // Dynamic Update for "Static" cars that got hit
+        for (const car of this.cars) {
+            // Physics
+            if (car.userData.velocity) {
+                car.position.add(car.userData.velocity.clone().multiplyScalar(delta));
+                car.rotation.y += (car.userData.angularVelocity || 0) * delta;
+
+                car.userData.velocity.multiplyScalar(0.95);
+                if (car.userData.angularVelocity) car.userData.angularVelocity *= 0.95;
+
+                if (car.userData.velocity.length() < 0.1) {
+                    car.userData.velocity = null;
+                }
+            }
+
+            // Effects
+            if (car.userData.health < 50 && this.effectSystem && Math.random() < 0.05) {
+                if (car.userData.health < 20) this.effectSystem.createFireEffect(car);
+                else this.effectSystem.createSmokeEffect(car);
+            }
+        }
     }
 }

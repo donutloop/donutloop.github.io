@@ -89,10 +89,12 @@ async function init() {
         // Pass systems to Player (for interaction/collision logic)
         player.trafficSystem = trafficSystem;
         player.parkingSystem = parkingSystem;
+        player.pedestrianSystem = pedestrianSystem;
 
         // Dependency Injection
-        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem);
-        pedestrianSystem.setDependencies(trafficLightSystem, parkingSystem);
+        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem);
+        parkingSystem.setDependencies(effectSystem);
+        pedestrianSystem.setDependencies(trafficLightSystem, parkingSystem, effectSystem);
 
         // Weather
         weatherSystem = new WeatherSystem(scene, worldData.directionalLight, worldData.ambientLight, worldData.materials);
@@ -132,7 +134,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.12.0 - PARKING OPTIMIZATION';
+        verDiv.innerHTML = 'v5.13.0 - CRASH PHYSICS';
         document.body.appendChild(verDiv);
 
         animate(() => {

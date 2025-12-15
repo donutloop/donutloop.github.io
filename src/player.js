@@ -489,9 +489,8 @@ export class Player {
     checkCarCollision() {
         if (!this.currentCar) return false;
 
+        this.currentCar.mesh.updateMatrixWorld();
         const carBox = new THREE.Box3().setFromObject(this.currentCar.mesh);
-        // Shrink slightly to avoid colliding with itself or weird ground issues
-        carBox.expandByScalar(-0.2);
 
         // 1. Check Buildings (Static Colliders)
         if (this.colliders) {
@@ -504,26 +503,140 @@ export class Player {
         if (this.trafficSystem) {
             for (const otherCar of this.trafficSystem.cars) {
                 if (otherCar === this.currentCar) continue;
-                // Simple distance check first optimization
-                if (otherCar.mesh.position.distanceTo(this.currentCar.mesh.position) > 10) continue;
+                if (otherCar.mesh.position.distanceTo(this.currentCar.mesh.position) > 25) continue;
 
+                otherCar.mesh.updateMatrixWorld();
                 const otherBox = new THREE.Box3().setFromObject(otherCar.mesh);
-                if (carBox.intersectsBox(otherBox)) return true;
+
+                if (carBox.intersectsBox(otherBox)) {
+                    // HIT TRAFFIC
+                    console.log("HIT TRAFFIC!");
+
+                    const impactPoint = this.getImpactPoint(this.currentCar.mesh, otherCar.mesh);
+                    this.applyCrashDamage(this.currentCar.mesh, otherCar.mesh, impactPoint, otherCar);
+
+                    // Specific Traffic Physics
+                    if (otherCar.velocity) {
+                        this.applyCrashPhysics(this.currentCar.mesh, otherCar, impactPoint, otherCar.mesh.position);
+                        otherCar.stunned = 2.0;
+                    }
+
+                    return { hit: true, point: impactPoint, object: otherCar };
+                }
             }
         }
 
-        // 3. Check Parked Cars
+        // 3. Check Pedestrians
+        if (this.pedestrianSystem && this.pedestrianSystem.peds) {
+            for (const ped of this.pedestrianSystem.peds) {
+                if (ped.mesh.position.distanceTo(this.currentCar.mesh.position) > 25) continue;
+
+                ped.mesh.updateMatrixWorld();
+                const pedBox = new THREE.Box3().setFromObject(ped.mesh);
+
+                if (carBox.intersectsBox(pedBox)) {
+                    // HIT PEDESTRIAN
+                    if (ped.state !== 'RAGDOLL') {
+                        console.log("HIT PEDESTRIAN!");
+                        ped.state = 'RAGDOLL';
+                        ped.ragdollTimer = 4.0;
+
+                        // Launch
+                        const forward = new THREE.Vector3(0, 0, 1).applyEuler(this.currentCar.mesh.rotation);
+                        const speed = Math.abs(this.carVelocity) || 20;
+                        ped.velocity.copy(forward).multiplyScalar(speed * 0.8 + 5);
+                        ped.velocity.y += 6;
+
+                        if (this.effectSystem) this.effectSystem.createCrashEffect(ped.mesh.position);
+                        return { hit: true, point: ped.mesh.position.clone(), object: ped };
+                    }
+                }
+            }
+        }
+
+        // 4. Check Parked Cars
         if (this.parkingSystem) {
             for (const otherCar of this.parkingSystem.cars) {
-                if (this.currentCar.mesh === otherCar) continue; // if we are driving a parked car
-                if (otherCar.position.distanceTo(this.currentCar.mesh.position) > 10) continue;
+                if (this.currentCar.mesh === otherCar) continue;
+                if (otherCar.position.distanceTo(this.currentCar.mesh.position) > 25) continue;
 
+                otherCar.updateMatrixWorld();
                 const otherBox = new THREE.Box3().setFromObject(otherCar);
-                if (carBox.intersectsBox(otherBox)) return true;
+
+                if (carBox.intersectsBox(otherBox)) {
+                    // HIT PARKED
+                    console.log("HIT PARKED!");
+
+                    // Wake up
+                    if (!otherCar.userData.velocity) {
+                        otherCar.userData.velocity = new THREE.Vector3();
+                        otherCar.userData.angularVelocity = 0;
+                    }
+
+                    const impactPoint = this.getImpactPoint(this.currentCar.mesh, otherCar);
+                    this.applyCrashDamage(this.currentCar.mesh, otherCar, impactPoint, otherCar.userData);
+                    this.applyCrashPhysics(this.currentCar.mesh, otherCar.userData, impactPoint, otherCar.position);
+
+                    return { hit: true, point: impactPoint, object: otherCar };
+                }
             }
         }
 
         return false;
+    }
+
+    getImpactPoint(meshA, meshB) {
+        // Simple midpoint approx
+        const p1 = meshA.position;
+        const p2 = meshB.position;
+        const pt = new THREE.Vector3().lerpVectors(p1, p2, 0.5);
+        pt.y = 0.5;
+        return pt;
+    }
+
+    applyCrashDamage(attackerMesh, victimMesh, impactPoint, victimStats) {
+        // Deform Attacker
+        attackerMesh.children.forEach(c => {
+            if (c.isMesh) deformMesh(c, impactPoint, 2.0, 0.8);
+        });
+
+        // Deform Victim
+        victimMesh.children.forEach(c => {
+            if (c.isMesh) {
+                if (!c.userData.isUnique) { c.geometry = c.geometry.clone(); c.userData.isUnique = true; }
+                deformMesh(c, impactPoint, 2.0, 0.8);
+            }
+        });
+
+        // Effect
+        if (this.effectSystem) this.effectSystem.createCrashEffect(impactPoint);
+
+        // Reduce Health
+        const speed = Math.abs(this.carVelocity);
+        const damage = speed * 0.5;
+
+        // Attacker Health
+        if (attackerMesh.userData.health !== undefined) attackerMesh.userData.health -= damage;
+        // Victim Health (stats object)
+        if (victimStats.health !== undefined) victimStats.health -= damage;
+    }
+
+    applyCrashPhysics(attackerMesh, victimPhysicsState, impactPoint, victimPosition) {
+        const forward = new THREE.Vector3(0, 0, 1).applyEuler(attackerMesh.rotation);
+        const speed = Math.abs(this.carVelocity);
+
+        // Linear
+        const force = forward.multiplyScalar(speed * 0.6);
+        victimPhysicsState.velocity.add(force);
+
+        // Angular
+        const lever = new THREE.Vector3().subVectors(impactPoint, victimPosition);
+        const torque = new THREE.Vector3().crossVectors(lever, force);
+        victimPhysicsState.angularVelocity = torque.y * 0.1;
+
+        // Player Reaction (Bounce/Slow)
+        this.carVelocity *= 0.5;
+        this.shakeIntensity = 1.0;
     }
 
     checkCollision() {

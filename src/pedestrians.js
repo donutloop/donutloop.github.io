@@ -7,7 +7,7 @@ export class PedestrianSystem {
         this.blockSize = blockSize;
         this.roadWidth = roadWidth;
         this.chunkPeds = new Map();
-
+        this.peds = []; // [NEW] Flat list
         // Settings
         this.maxSpeed = 2.0;
         this.maxForce = 5.0; // Steering force limit
@@ -38,12 +38,12 @@ export class PedestrianSystem {
 
             this.scene.add(group);
 
-            pedsList.push({
+            const ped = {
                 mesh: group,
                 velocity: new THREE.Vector3(0, 0, 0),
                 acceleration: new THREE.Vector3(0, 0, 0),
-                state: 'WALKING', // WALKING, WAITING, CROSSING
-                target: state.target, // Keep walking towards a goal
+                state: 'WALKING',
+                target: state.target,
                 chunkX: xOffset,
                 chunkZ: zOffset,
                 chunkSize: chunkSize,
@@ -51,8 +51,11 @@ export class PedestrianSystem {
                 legAnimTimer: Math.random() * 10,
                 leftLeg: group.children[2],
                 rightLeg: group.children[3],
-                waitTimer: 0
-            });
+                waitTimer: 0,
+                ragdollTimer: 0
+            };
+            pedsList.push(ped);
+            this.peds.push(ped);
         }
         this.chunkPeds.set(`${cx},${cz}`, pedsList);
     }
@@ -63,6 +66,8 @@ export class PedestrianSystem {
             const peds = this.chunkPeds.get(key);
             peds.forEach(ped => {
                 this.scene.remove(ped.mesh);
+                const idx = this.peds.indexOf(ped);
+                if (idx > -1) this.peds.splice(idx, 1);
             });
             this.chunkPeds.delete(key);
         }
@@ -144,6 +149,32 @@ export class PedestrianSystem {
 
         for (const peds of this.chunkPeds.values()) {
             peds.forEach(ped => {
+                // RAGDOLL PHYSICS
+                if (ped.state === 'RAGDOLL') {
+                    ped.velocity.y -= 20 * delta; // Gravity
+                    ped.mesh.position.add(ped.velocity.clone().multiplyScalar(delta));
+
+                    // Rotate wildly
+                    ped.mesh.rotation.x += delta * 5;
+                    ped.mesh.rotation.z += delta * 5;
+
+                    // Floor collision
+                    if (ped.mesh.position.y < 0) {
+                        ped.mesh.position.y = 0;
+                        ped.velocity.multiplyScalar(0.5); // Friction
+                        ped.velocity.y = 0;
+                    }
+
+                    ped.ragdollTimer -= delta;
+                    if (ped.ragdollTimer <= 0 && ped.velocity.length() < 0.1) {
+                        // Reset to walking
+                        ped.state = 'WALKING';
+                        ped.mesh.rotation.set(0, 0, 0);
+                        ped.mesh.position.y = 0;
+                    }
+                    return; // Skip AI
+                }
+
                 const force = new THREE.Vector3(0, 0, 0);
 
                 // 1. Behavior: Seek Target
