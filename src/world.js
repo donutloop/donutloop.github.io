@@ -32,25 +32,25 @@ function createSignTexture(text, color, bgColor) {
 const matCache = {
     road: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }),
     sidewalk: new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 }),
-    building: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2, metalness: 0.5 }), // Fallback
-    window: new THREE.MeshBasicMaterial({ color: 0xffffaa }),
+    building: new THREE.MeshStandardMaterial({ color: 0x707070, roughness: 0.2, metalness: 0.5 }), // Fallback (Granite)
+    window: new THREE.MeshBasicMaterial({ color: 0x111111 }), // Default OFF (Dark Grey)
     lane: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     ground: new THREE.MeshStandardMaterial({ color: 0x3a2e26, roughness: 1.0 }),
     // NYC Materials
-    stoneA: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 }), // Concrete/Limestone
-    stoneB: new THREE.MeshStandardMaterial({ color: 0xaa9988, roughness: 0.9 }), // Warm Stone
-    glassBlue: new THREE.MeshStandardMaterial({ color: 0x224488, roughness: 0.1, metalness: 0.8 }), // Lighter
-    glassBlack: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.1, metalness: 0.8 }), // Lighter
-    metalGold: new THREE.MeshStandardMaterial({ color: 0xccaa44, roughness: 0.3, metalness: 0.8 }), // Art Deco Trim
-    brick: new THREE.MeshStandardMaterial({ color: 0x884433, roughness: 0.9 }), // Red Brick
-    cyberDark: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.9 }),
+    stoneA: new THREE.MeshStandardMaterial({ color: 0xE5DCC3, roughness: 0.9 }), // Limestone
+    stoneB: new THREE.MeshStandardMaterial({ color: 0xC2B280, roughness: 0.9 }), // Warm Stone/Sandstone
+    glassBlue: new THREE.MeshStandardMaterial({ color: 0x4A6B8A, roughness: 0.05, metalness: 0.9, envMapIntensity: 1.0 }), // Classic Slate Glass
+    glassBlack: new THREE.MeshStandardMaterial({ color: 0x2C3539, roughness: 0.05, metalness: 0.9, envMapIntensity: 1.0 }), // Modern Gunmetal Glass
+    metalGold: new THREE.MeshStandardMaterial({ color: 0xCFB53B, roughness: 0.1, metalness: 1.0, envMapIntensity: 1.0 }), // Art Deco Brass
+    brick: new THREE.MeshStandardMaterial({ color: 0x8D4E3C, roughness: 0.9 }), // Brownstone / Red Brick
+    cyberDark: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.8, envMapIntensity: 0.8 }), // Sleek metal
     neonPink: new THREE.MeshBasicMaterial({ color: 0xff00ff }),
     neonCyan: new THREE.MeshBasicMaterial({ color: 0x00ffff }),
     roof: new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 1.0 }),
     marketSign: new THREE.MeshBasicMaterial({ map: createSignTexture('MARKET', '#ffffff', '#0088aa') }),
     gate: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.4, metalness: 0.9 }),
     frameSilver: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.9 }),
-    frameBlack: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8 }),
+    frameBlack: new THREE.MeshStandardMaterial({ color: 0x1B1B1B, roughness: 0.8 }), // Cast Iron
     // Tree Materials
     trunkBrown: new THREE.MeshStandardMaterial({ color: 0x553311, roughness: 0.9 }),
     trunkWhite: new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8 }),
@@ -284,31 +284,7 @@ function addGate(x, z, width, chunkGroup, style = 0) {
     chunkGroup.add(gate);
 }
 
-function createProceduralBuilding(x, z, width, chunkGroup, colliders) {
-    // 3 Styles: 0=Setback (Classic), 1=Modern (Glass), 2=Art Deco (Stone+Gold)
-    const style = Math.floor(Math.random() * 3);
-    const height = 15 + Math.random() * 45; // Much Taller: 15 to 60 units
 
-    // Base Collider (Always the full footprint for simplicity in peds logic)
-    // We already leave a rim on the sidewalk, so this is safe.
-    const box = new THREE.Box3();
-    box.min.set(x - width / 2, 0, z - width / 2);
-    box.max.set(x + width / 2, height, z + width / 2);
-    colliders.push(box);
-
-    addGate(x, z, width, chunkGroup, style);
-
-    if (style === 0) {
-        // ... classic ...
-        // (Note: createProceduralBuilding is the old function, createNYCBuilding is the main one now. 
-        // I should stick to edits required for createNYCBuilding mainly, but good to keep both consistent)
-        // Leaving logic as is because createNYCBuilding is separate lower down.
-        // Actually, looking at file, createProceduralBuilding might not be used?
-        // createCityChunk calls createNYCBuilding.
-        // I will focus edits on createNYCBuilding section below.
-    }
-    // ...
-}
 
 // REDEFINING addWindows to use InstancedMesh logic.
 // Instead of adding meshes, we push matrices to an array.

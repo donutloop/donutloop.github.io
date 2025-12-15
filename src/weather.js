@@ -308,6 +308,41 @@ export class WeatherSystem {
             this.directionalLight.color.setHex(0xaaaaff);
         }
 
+        // Window Lights Logic
+        // On at night (19:00 - 6:00), Off during day
+        // Transition around 18:00-19:00 and 6:00-7:00
+        let windowInt = 0;
+        if (t > 19 || t < 5) {
+            windowInt = 1.0; // Full On
+        } else if (t >= 18 && t <= 19) {
+            // Turn On
+            windowInt = (t - 18);
+        } else if (t >= 5 && t <= 6) {
+            // Turn Off
+            windowInt = 1.0 - (t - 5);
+        }
+
+        if (this.materials.window) {
+            // 0x111111 (Off) to 0xffffaa (On)
+            const offC = new THREE.Color(0x111111);
+            const onC = new THREE.Color(0xffffaa);
+            this.materials.window.color.lerpColors(offC, onC, windowInt);
+        }
+
+
+
+        // Night Reflection Logic
+        // Buildings shouldn't reflect bright daylight at night.
+        // We modulate envMapIntensity.
+        const reflectionInt = Math.max(0.1, lightInt * 0.8); // Dim to 0.1 at night, nearly 1.0 at day
+
+        const reflectMats = ['glassBlue', 'glassBlack', 'metalGold', 'cyberDark', 'frameSilver'];
+        reflectMats.forEach(key => {
+            if (this.materials[key]) {
+                this.materials[key].envMapIntensity = reflectionInt;
+            }
+        });
+
         if (t >= 6 && t < 18) {
             this.directionalLight.color.setHex(0xffffff);
         }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 
 let scene, camera, renderer, controls;
@@ -7,6 +8,8 @@ export function initScene() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111); // Darker background usually looks more premium initialy
     scene.fog = new THREE.FogExp2(0x111111, 0.02);
+
+
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 5, 10);
@@ -22,6 +25,13 @@ export function initScene() {
     renderer.toneMappingExposure = 1.0;
 
     document.getElementById('app').appendChild(renderer.domElement);
+
+    // [NEW] Reflection System: Environment Map
+    // Using PMREMGenerator to create a high-quality environment from a virtual room
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    // We don't dispose pmremGenerator immediately if we plan to use it for dynamic stuff,
+    // but here it's static, so arguably we could. But keeping it simple.
 
     window.addEventListener('resize', onWindowResize);
 
