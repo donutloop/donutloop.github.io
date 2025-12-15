@@ -65,73 +65,8 @@ export class WeatherSystem {
         });
         this.sun = new THREE.Mesh(sunGeom, sunMat);
         // Align with initial lighting
-        this.sun.position.set(50, 100, 50);
+        this.sun.position.set(50, 500, 50);
         this.scene.add(this.sun);
-
-        // Clouds
-        this.clouds = new THREE.Group();
-        const cloudGeom = new THREE.BoxGeometry(1, 1, 1);
-        const cloudMat = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
-            roughness: 0.9,
-            flatShading: true,
-            transparent: true,
-            opacity: 0.9
-        });
-
-        const createCloud = (type) => {
-            const cloud = new THREE.Group();
-            let blobs = 3;
-            let scaleBase = 1;
-            let spread = 5;
-
-            switch (type) {
-                case 'small':
-                    blobs = 3; scaleBase = 1.5; spread = 4; break;
-                case 'medium':
-                    blobs = 5; scaleBase = 3.0; spread = 8; break;
-                case 'large':
-                    blobs = 8; scaleBase = 5.0; spread = 12; break;
-                case 'massive':
-                    blobs = 15; scaleBase = 8.0; spread = 20; break;
-            }
-
-            for (let b = 0; b < blobs; b++) {
-                const mesh = new THREE.Mesh(cloudGeom, cloudMat);
-                mesh.position.set(
-                    (Math.random() - 0.5) * spread,
-                    (Math.random() - 0.5) * (spread * 0.4),
-                    (Math.random() - 0.5) * (spread * 0.6)
-                );
-
-                // Random variation within the base scale
-                const s = scaleBase * (0.8 + Math.random() * 0.5);
-                mesh.scale.set(s, s * 0.6, s * 0.8);
-
-                cloud.add(mesh);
-            }
-            return cloud;
-        };
-
-        const cloudTypes = ['small', 'small', 'medium', 'medium', 'medium', 'large', 'large', 'massive'];
-
-        // Spawn more clouds for density
-        for (let i = 0; i < 35; i++) {
-            const type = cloudTypes[Math.floor(Math.random() * cloudTypes.length)];
-            const cloud = createCloud(type);
-
-            cloud.position.set(
-                (Math.random() - 0.5) * 500, // Wider area
-                60 + Math.random() * 40,    // Harder height variation
-                (Math.random() - 0.5) * 500
-            );
-
-            // Random rotation for variety
-            cloud.rotation.y = Math.random() * Math.PI * 2;
-
-            this.clouds.add(cloud);
-        }
-        this.scene.add(this.clouds);
     }
 
     setSunny() {
@@ -151,8 +86,11 @@ export class WeatherSystem {
 
         // Sky Elements
         this.sun.visible = true;
-        this.clouds.visible = true;
-        this.clouds.children.forEach(c => c.children.forEach(m => m.material.color.setHex(0xffffff)));
+        // Clouds controlled via shared material
+        if (this.materials.cloud) {
+            this.materials.cloud.color.setHex(0xffffff);
+            this.materials.cloud.opacity = 0.9;
+        }
 
         // Particles
         this.particleSystem.visible = false;
@@ -180,8 +118,11 @@ export class WeatherSystem {
 
         // Sky Elements
         this.sun.visible = false;
-        this.clouds.visible = true; // Dark rain clouds?
-        this.clouds.children.forEach(c => c.children.forEach(m => m.material.color.setHex(0x333344))); // Dark Grey clouds
+        // Clouds Darker
+        if (this.materials.cloud) {
+            this.materials.cloud.color.setHex(0x333344);
+            this.materials.cloud.opacity = 0.9;
+        }
 
         // Particles
         this.particleSystem.visible = true;
@@ -212,7 +153,11 @@ export class WeatherSystem {
 
         // Sky Elements
         this.sun.visible = false; // Overcast
-        this.clouds.visible = false; // Hidden in fog/whiteout
+        // Clouds Faded in snow
+        if (this.materials.cloud) {
+            this.materials.cloud.color.setHex(0xeeeeee);
+            this.materials.cloud.opacity = 0.4;
+        }
 
         // Particles
         this.particleSystem.visible = true;
@@ -234,31 +179,7 @@ export class WeatherSystem {
 
         this.updateTimeCycle(playerPos); // Pass playerPos
 
-        // Move clouds
-        // Make clouds follow player to create infinite sky illusion
-        const cloudRange = 500;
 
-        if (this.clouds && this.clouds.visible) {
-            // Center group on player X/Z generally? 
-            // Better: Keep local clouds moving, but wrap relative to player.
-
-            this.clouds.children.forEach(cloud => {
-                cloud.position.x += delta * 2;
-
-                // Wrap relative to player
-                const relX = cloud.position.x - playerPos.x;
-                const relZ = cloud.position.z - playerPos.z;
-
-                if (relX > cloudRange / 2) cloud.position.x -= cloudRange;
-                if (relX < -cloudRange / 2) cloud.position.x += cloudRange;
-
-                // Also Check Z to keep them around player
-                if (relZ > cloudRange / 2) cloud.position.z -= cloudRange;
-                if (relZ < -cloudRange / 2) cloud.position.z += cloudRange;
-            });
-
-            // Re-center whole group? No, individual clouds wrap.
-        }
 
         if (this.particleSystem && this.particleSystem.visible) {
             const positions = this.particles.attributes.position.array;

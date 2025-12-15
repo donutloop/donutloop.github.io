@@ -63,7 +63,8 @@ const matCache = {
     leafOrange: new THREE.MeshStandardMaterial({ color: 0xdd7722, roughness: 0.8 }), // Muted orange
     leafRed: new THREE.MeshStandardMaterial({ color: 0xaa3333, roughness: 0.8 }), // Maple Red
     leafYellow: new THREE.MeshStandardMaterial({ color: 0xddcc22, roughness: 0.8 }), // Birch Yellow
-    dirt: new THREE.MeshStandardMaterial({ color: 0x5b4033, roughness: 1.0 })
+    dirt: new THREE.MeshStandardMaterial({ color: 0x5b4033, roughness: 1.0 }),
+    cloud: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true, transparent: true, opacity: 0.9 })
 };
 
 const treeGeom = {
@@ -216,6 +217,48 @@ function createProceduralTree(type, x, z, chunkGroup) {
     chunkGroup.add(treeGroup);
 }
 
+const cloudGeom = new THREE.BoxGeometry(1, 1, 1);
+
+function createProceduralCloud(x, z, chunkGroup) {
+    // Massive clouds high up
+    const cloudGroup = new THREE.Group();
+    const height = 450 + Math.random() * 150; // 450 to 600
+    cloudGroup.position.set(x, height, z);
+
+    // Randomize Type logic (Inline for simplicity)
+    let blobs = 8;
+    let scaleBase = 20;
+    let spread = 50;
+
+    const r = Math.random();
+    if (r < 0.3) { // Small (Relative to huge)
+        blobs = 5; scaleBase = 15; spread = 40;
+    } else if (r < 0.7) { // Medium
+        blobs = 8; scaleBase = 25; spread = 60;
+    } else { // Massive
+        blobs = 12; scaleBase = 40; spread = 100;
+    }
+
+    for (let b = 0; b < blobs; b++) {
+        const mesh = new THREE.Mesh(cloudGeom, matCache.cloud);
+        mesh.position.set(
+            (Math.random() - 0.5) * spread,
+            (Math.random() - 0.5) * (spread * 0.4),
+            (Math.random() - 0.5) * (spread * 0.6)
+        );
+
+        const s = scaleBase * (0.8 + Math.random() * 0.5);
+        mesh.scale.set(s, s * 0.6, s * 0.8);
+        mesh.castShadow = true; // Clouds should cast shadows on the city!
+        // Note: Shadow camera might need to be huge to catch this.
+        cloudGroup.add(mesh);
+    }
+
+    // Random Rotation
+    cloudGroup.rotation.y = Math.random() * Math.PI * 2;
+    chunkGroup.add(cloudGroup);
+}
+
 function addGate(x, z, width, chunkGroup, style = 0) {
     const gateH = 2.5;
     const gateW = 2.0;
@@ -307,7 +350,11 @@ function spawnWindowMatrices(x, y, z, w, h, d, matrices) {
 }
 
 function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
-    const style = Math.floor(Math.random() * 5); // 0-4
+    // Weighted Style Selection: Giga Towers (5) are rare (1.2%)
+    let style = Math.floor(Math.random() * 5); // Default 0-4
+    if (Math.random() < 0.012) {
+        style = 5;
+    }
     const height = 20 + Math.random() * 50;
 
     // Collider
@@ -399,9 +446,40 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
 
         // Fire Escapes (Stylized stripes)
         const s = new THREE.Mesh(buildingGeom, matCache.sidewalk);
-        s.position.set(x + width / 2 + 0.1, height / 2, z);
         s.scale.set(0.2, height * 0.8, 1.5);
         chunkGroup.add(s);
+    } else if (style === 5) {
+        // --- Eco-Tower (Optimized Giga Tower) ---
+        // White concrete with terraced levels + Simple Vegetation
+
+        // OVERRIDE HEIGHT: GIGA TOWER
+        const superHeight = 300 + Math.random() * 80;
+
+        const levels = 8 + Math.floor(Math.random() * 4); // Slightly fewer levels for performance
+        let currY = 0;
+        let currW = width;
+        const levelH = superHeight / levels;
+
+        for (let i = 0; i < levels; i++) {
+            const b = new THREE.Mesh(buildingGeom, matCache.trunkWhite);
+            b.position.set(x, currY + levelH / 2, z);
+            b.scale.set(currW, levelH, currW);
+            b.castShadow = true; b.receiveShadow = true;
+            chunkGroup.add(b);
+
+            // Windows (Skip for top few levels to save rendering?)
+            if (i > 0 && i < levels - 1) {
+                spawnWindowMatrices(x, currY + levelH / 2, z, currW, levelH, currW, windowMatrices);
+            }
+
+            currY += levelH;
+        }
+
+        // Update Collider
+        if (colliders.length > 0) {
+            colliders[colliders.length - 1].max.y = superHeight;
+        }
+
     } else {
         // --- Futuristic Cyberpunk ---
         const b = new THREE.Mesh(buildingGeom, matCache.cyberDark);
@@ -576,6 +654,16 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         chunkGroup.add(instancedWindows);
     }
 
+    // CLOUDS: Generate 1-2 clouds above the city chunk
+    const numClouds = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < numClouds; i++) {
+        createProceduralCloud(
+            xPos + (Math.random() - 0.5) * size,
+            zPos + (Math.random() - 0.5) * size,
+            chunkGroup
+        );
+    }
+
     return { mesh: chunkGroup, colliders: colliders };
 }
 
@@ -664,6 +752,16 @@ export function createHighwayChunk(xPos, zPos, size, roadWidth, type = 'x') {
         colliders.push(box);
     }
 
+    // CLOUDS: Generate 1-2 clouds above the highway chunk
+    const numClouds = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < numClouds; i++) {
+        createProceduralCloud(
+            xPos + (Math.random() - 0.5) * size,
+            zPos + (Math.random() - 0.5) * size,
+            chunkGroup
+        );
+    }
+
     return { mesh: chunkGroup, colliders: colliders };
 }
 
@@ -698,6 +796,16 @@ export function createWastelandChunk(xPos, zPos, size) {
         colliders.push(box);
     }
 
+    // CLOUDS: Generate 1-2 clouds above the wasteland chunk
+    const numClouds = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < numClouds; i++) {
+        createProceduralCloud(
+            xPos + (Math.random() - 0.5) * size,
+            zPos + (Math.random() - 0.5) * size,
+            chunkGroup
+        );
+    }
+
     return { mesh: chunkGroup, colliders: colliders };
 }
 
@@ -707,7 +815,7 @@ export async function createWorld(scene) {
     scene.add(ambientLight);
 
     const directionalLight = new THREE.DirectionalLight(0xaaccff, 0.5);
-    directionalLight.position.set(50, 100, 50);
+    directionalLight.position.set(50, 500, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
