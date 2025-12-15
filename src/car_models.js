@@ -80,38 +80,39 @@ export function createCarMesh(type = 'sedan', color = null) {
         addWheel(-0.9, 0.35, -1.3); addWheel(0.9, 0.35, -1.3);
 
     } else if (type === 'truck') {
-        const width = 2.1;
-        const chassisY = 0.8;
+        // GIANT TRUCK (2x Scale)
+        const width = 3.2;  // Was ~2.1, now huge
+        const chassisY = 1.2; // Higher ground clearance
 
         // Separate Cab & Bed for realism
         // Cab
-        const cab = new THREE.Mesh(new THREE.BoxGeometry(width, 1.2, 1.5), paintMat);
-        cab.position.set(0, chassisY + 0.6, 1.0);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(width, 2.0, 2.5), paintMat); // Taller, deeper cab
+        cab.position.set(0, chassisY + 1.0, 1.5);
         cab.castShadow = true;
         carGroup.add(cab);
 
         // Windshield
-        const windshield = new THREE.Mesh(new THREE.BoxGeometry(width - 0.1, 0.6, 0.1), glassMat);
-        windshield.position.set(0, chassisY + 0.8, 1.76); // Sticking out slightly
+        const windshield = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 1.0, 0.1), glassMat);
+        windshield.position.set(0, chassisY + 1.4, 2.8); // Front of cab
         carGroup.add(windshield);
 
         // Bed
-        const bed = new THREE.Mesh(new THREE.BoxGeometry(width, 0.6, 2.5), paintMat);
-        bed.position.set(0, chassisY + 0.3, -1.2);
+        const bed = new THREE.Mesh(new THREE.BoxGeometry(width, 1.0, 4.5), paintMat); // Longer bed
+        bed.position.set(0, chassisY + 0.5, -2.5);
         bed.castShadow = true;
         carGroup.add(bed);
 
         // Bed Rails
-        const railL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 2.5), paintMat);
-        railL.position.set(-width / 2 + 0.05, chassisY + 0.4, -1.2);
+        const railL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 4.5), paintMat);
+        railL.position.set(-width / 2 + 0.1, chassisY + 0.6, -2.5);
         carGroup.add(railL);
         const railR = railL.clone();
-        railR.position.set(width / 2 - 0.05, chassisY + 0.4, -1.2);
+        railR.position.set(width / 2 - 0.1, chassisY + 0.6, -2.5);
         carGroup.add(railR);
 
-        // Wheels
-        addWheel(-1.0, 0.45, 1.5, 1.2); addWheel(1.0, 0.45, 1.5, 1.2);
-        addWheel(-1.0, 0.45, -1.5, 1.2); addWheel(1.0, 0.45, -1.5, 1.2);
+        // Wheels (Monster size)
+        addWheel(-1.5, 0.7, 2.5, 2.2); addWheel(1.5, 0.7, 2.5, 2.2); // Front
+        addWheel(-1.5, 0.7, -3.5, 2.2); addWheel(1.5, 0.7, -3.5, 2.2); // Rear (Longer wheelbase)
 
     } else if (type === 'suv') {
         const width = 2.1;

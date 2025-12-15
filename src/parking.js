@@ -89,46 +89,146 @@ export class ParkingSystem {
         // Safe zones relative to center: [-17, -8] and [8, 17]
         // Intersection is roughly [-7, 7].
         // We will try to spawn 1 car in each valid zone per side if possible.
+        // NOW WITH COLLISION CHECKS
 
         const safeZones = [
-            { start: -15, end: -9 },
-            { start: 9, end: 15 }
+            { start: -16, end: -8 },
+            { start: 8, end: 16 }
         ];
 
-        safeZones.forEach(zone => {
-            if (Math.random() < 0.4) return; // 60% chance to spawn in a zone
+        // We track occupied boxes in this chunk generation step.
+        // box: { minX, maxX, minZ, maxZ }
+        const occupied = [];
 
-            const type = getRandomCarType();
-            const car = createCarMesh(type);
+        // Add "virtual" boxes for the intersection roads to prevent corner overlap?
+        // Actually, just ensuring we don't overlap with *other* parked cars in this function call is a good start.
+        // But X-row vs Z-row overlaps happen at corners.
+        // We can just accumulate `occupied` across the two calls if we pass it in?
+        // But `occupied` is local to this row call currenty.
+        // Fix: Make `occupied` shared or check against `list`?
+        // `list` contains meshes. We can compute box from mesh position/rotation.
 
-            // Random pos within zone
-            const offsetAlongRoad = zone.start + Math.random() * (zone.end - zone.start);
+        // Helper to check collision
+        const checkCollision = (box) => {
+            // box: {minX, maxX, minZ, maxZ}
 
-            // Parking offset from center line (Curb is at roadWidth/2)
-            // Park at +/- (roadWidth/2 - 1.0)
-            const parkOffset = this.roadWidth / 2 - 1.0;
-            const sideOffset = Math.random() > 0.5 ? parkOffset : -parkOffset;
+            // Check against existing cars in `list`
+            for (let car of list) {
+                // Get box of existing car
+                // We know visual dimensions... roughly.
+                // Or we can store it in userData?
+                // Let's compute it.
 
-            if (isXRow) {
-                // Road runs along X axis.
-                // Car main axis is Z. To align with X road, rotate 90 deg (PI/2).
-                // Wait, car model forward is -Z? Or Z?
-                // Usually cars are long along Z.
-                // If I want it parallel to X axis, I need to rotate 90.
+                const dims = this.getDimensions(car.userData.type);
+                const cx = car.position.x;
+                const cz = car.position.z;
+                const rot = car.rotation.y;
 
-                car.position.set(chunkX + offsetAlongRoad, 0, chunkZ + sideOffset);
-                car.rotation.y = Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2;
-            } else {
-                // Road runs along Z axis.
-                // Car is Z aligned. So 0 or PI is parallel to Z axis.
+                // Effective Width/Length depends on rotation
+                // If rot is roughly 0 or PI, Width is width, Length is length.
+                // If rot is PI/2, Width is length, Length is width.
 
-                car.position.set(chunkX + sideOffset, 0, chunkZ + offsetAlongRoad);
-                car.rotation.y = Math.random() > 0.5 ? 0 : Math.PI;
+                let effectiveW, effectiveL;
+                if (Math.abs(rot) < 0.1 || Math.abs(rot - Math.PI) < 0.1) {
+                    effectiveW = dims.w;
+                    effectiveL = dims.l;
+                } else {
+                    effectiveW = dims.l;
+                    effectiveL = dims.w;
+                }
+
+                // Add buffer
+                const buffer = 1.0;
+                const existingBox = {
+                    minX: cx - effectiveW / 2 - buffer,
+                    maxX: cx + effectiveW / 2 + buffer,
+                    minZ: cz - effectiveL / 2 - buffer,
+                    maxZ: cz + effectiveL / 2 + buffer
+                };
+
+                if (box.maxX > existingBox.minX && box.minX < existingBox.maxX &&
+                    box.maxZ > existingBox.minZ && box.minZ < existingBox.maxZ) {
+                    return true; // Collision
+                }
             }
+            return false;
+        };
 
-            this.scene.add(car);
-            list.push(car);
+        safeZones.forEach(zone => {
+            // Try to spawn multiple cars?
+            // With Real Distance, giant trucks take up 8m. Zone is 8m long (8 to 16).
+            // So max 1 truck per zone.
+            // Small cars (4m). 2 might fit with buffer.
+            // Let's try to fit as many as possible?
+            // Or just random attempts.
+
+            const attempts = 5;
+            for (let i = 0; i < attempts; i++) {
+                if (Math.random() < 0.3) continue; // Chance to skip
+
+                const type = getRandomCarType();
+                const dims = this.getDimensions(type); // {w, l}
+
+                // Random Pos
+                const offsetAlongRoad = zone.start + Math.random() * (zone.end - zone.start);
+                const parkOffset = this.roadWidth / 2 - 1.0; // Near curb
+                const sideOffset = Math.random() > 0.5 ? parkOffset : -parkOffset;
+
+                let px, pz, rot;
+
+                if (isXRow) {
+                    px = chunkX + offsetAlongRoad;
+                    pz = chunkZ + sideOffset;
+                    rot = Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2;
+                } else {
+                    px = chunkX + sideOffset;
+                    pz = chunkZ + offsetAlongRoad;
+                    rot = Math.random() > 0.5 ? 0 : Math.PI;
+                }
+
+                // Create Candidate Box
+                let cw, cl;
+                if (isXRow) { cw = dims.l; cl = dims.w; } // Rotated 90
+                else { cw = dims.w; cl = dims.l; }
+
+                const buffer = 0.5; // Slight buffer for self
+                const box = {
+                    minX: px - cw / 2 - buffer,
+                    maxX: px + cw / 2 + buffer,
+                    minZ: pz - cl / 2 - buffer,
+                    maxZ: pz + cl / 2 + buffer
+                };
+
+                if (!checkCollision(box)) {
+                    // Spawn
+                    const car = createCarMesh(type);
+                    car.position.set(px, 0, pz);
+                    car.rotation.y = rot;
+                    this.scene.add(car);
+                    list.push(car);
+
+                    // Since we successfully added 1, maybe stop for this zone to prevent overcrowding visual?
+                    // User wants "Real distance".
+                    // If we pack them tightly, it's realistic city parking.
+                    // But simpler logic: 1 per slot is fine if slots are distinct.
+                    // But we used random float position.
+                    // Let's break after 1 successful spawn per zone for now to be safe, 
+                    // unless we want really dense parking.
+                    // Giant trucks need space.
+                    break;
+                }
+            }
         });
+    }
+
+    getDimensions(type) {
+        // Updated for GIANT TRUCKS and realistic sizes
+        switch (type) {
+            case 'truck': return { w: 3.5, l: 8.0 }; // Giant
+            case 'suv': return { w: 2.5, l: 5.0 };
+            case 'sport': return { w: 2.2, l: 4.6 };
+            default: return { w: 2.1, l: 4.4 }; // Sedan
+        }
     }
 
     update(delta) {
