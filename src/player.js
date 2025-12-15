@@ -758,11 +758,12 @@ export class Player {
     }
     getCarStats(type) {
         switch (type) {
-            case 'sport': return { maxSpeed: 160, acceleration: 120 };
-            case 'sedan': return { maxSpeed: 110, acceleration: 80 };
-            case 'suv': return { maxSpeed: 90, acceleration: 70 };
-            case 'truck': return { maxSpeed: 70, acceleration: 50 };
-            default: return { maxSpeed: 100, acceleration: 80 };
+            case 'sport': return { maxSpeed: 60, acceleration: 40 };
+            case 'sedan': return { maxSpeed: 45, acceleration: 30 };
+            case 'suv': return { maxSpeed: 40, acceleration: 25 };
+            case 'truck': return { maxSpeed: 35, acceleration: 20 };
+            case 'bus': return { maxSpeed: 30, acceleration: 15 };
+            default: return { maxSpeed: 45, acceleration: 30 };
         }
     }
 }

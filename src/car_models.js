@@ -113,6 +113,51 @@ export function createCarMesh(type = 'sedan', color = null) {
         addWheel(-1.5, 0.7, 2.5, 2.2); addWheel(1.5, 0.7, 2.5, 2.2); // Front
         addWheel(-1.5, 0.7, -3.5, 2.2); addWheel(1.5, 0.7, -3.5, 2.2); // Rear (Longer wheelbase)
 
+    } else if (type === 'bus') {
+        // BUS (Large Public Transit)
+        const width = 2.6;
+        const length = 8.0;
+        const chassisY = 0.6; // Low floor
+
+        if (!color) {
+            // Bus Colors
+            const r = Math.random();
+            if (r < 0.33) color = new THREE.Color(0x3366cc); // Blue
+            else if (r < 0.66) color = new THREE.Color(0xcc3333); // Red
+            else color = new THREE.Color(0xeeeeee); // White
+        }
+
+        const busPaint = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.2 });
+
+        // Main Body (Box)
+        const body = new THREE.Mesh(new THREE.BoxGeometry(width, 2.8, length, 8, 4, 12), busPaint);
+        body.position.set(0, chassisY + 1.4, 0);
+        body.castShadow = true;
+        carGroup.add(body);
+
+        // Windshield (Large front glass)
+        const windshield = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 1.2, 0.1), glassMat);
+        windshield.position.set(0, chassisY + 1.8, length / 2 + 0.05);
+        carGroup.add(windshield);
+
+        // Rear window
+        const rearWin = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 0.8, 0.1), glassMat);
+        rearWin.position.set(0, chassisY + 2.0, -length / 2 - 0.05);
+        carGroup.add(rearWin);
+
+        // Side Windows (Strip)
+        const sideWinL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, length - 1.0), glassMat);
+        sideWinL.position.set(-width / 2 - 0.05, chassisY + 1.8, 0);
+        carGroup.add(sideWinL);
+
+        const sideWinR = sideWinL.clone();
+        sideWinR.position.set(width / 2 + 0.05, chassisY + 1.8, 0);
+        carGroup.add(sideWinR);
+
+        // Wheels (6 wheels?)
+        addWheel(-1.1, 0.5, 2.5, 1.5); addWheel(1.1, 0.5, 2.5, 1.5);
+        addWheel(-1.1, 0.5, -2.5, 1.5); addWheel(1.1, 0.5, -2.5, 1.5);
+
     } else if (type === 'suv') {
         const width = 2.1;
         const length = 4.6;

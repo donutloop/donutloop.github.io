@@ -17,11 +17,12 @@ export class TrafficSystem {
     // [NEW] Speed definitions
     getSpeedForType(type) {
         switch (type) {
-            case 'sport': return 22;
-            case 'sedan': return 15;
-            case 'suv': return 12;
-            case 'truck': return 8;
-            default: return 10;
+            case 'sport': return 16;
+            case 'sedan': return 11;
+            case 'suv': return 9;
+            case 'truck': return 6;
+            case 'bus': return 5; // Very slow
+            default: return 8;
         }
     }
 
