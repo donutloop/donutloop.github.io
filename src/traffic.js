@@ -57,6 +57,7 @@ export class TrafficSystem {
                     axis: state.axis,
                     direction: state.direction,
                     speed: speed,
+                    type: type,
                     // Physics State
                     velocity: new THREE.Vector3(),
                     angularVelocity: 0,
@@ -188,9 +189,9 @@ export class TrafficSystem {
                     // Rotate
                     car.mesh.rotation.y += car.angularVelocity * delta;
 
-                    // Friction
-                    car.velocity.multiplyScalar(0.95);
-                    car.angularVelocity *= 0.95;
+                    // Friction (Sliding)
+                    car.velocity.multiplyScalar(0.98);
+                    car.angularVelocity *= 0.98;
 
                     // Stop check
                     if (car.velocity.length() < 0.1) {

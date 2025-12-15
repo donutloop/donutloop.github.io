@@ -503,19 +503,20 @@ export class Player {
         if (this.trafficSystem) {
             for (const otherCar of this.trafficSystem.cars) {
                 if (otherCar === this.currentCar) continue;
-                if (otherCar.mesh.position.distanceTo(this.currentCar.mesh.position) > 25) continue;
+
+                const dist = otherCar.mesh.position.distanceTo(this.currentCar.mesh.position);
+                if (dist > 25) continue;
 
                 otherCar.mesh.updateMatrixWorld();
                 const otherBox = new THREE.Box3().setFromObject(otherCar.mesh);
 
-                if (carBox.intersectsBox(otherBox)) {
-                    // HIT TRAFFIC
-                    console.log("HIT TRAFFIC!");
+                // HYBRID COLLISION: Box OR Sphere (Distance < 3.5)
+                if (carBox.intersectsBox(otherBox) || dist < 3.5) {
+                    console.log("HIT TRAFFIC! (Dist: " + dist.toFixed(2) + ")");
 
                     const impactPoint = this.getImpactPoint(this.currentCar.mesh, otherCar.mesh);
                     this.applyCrashDamage(this.currentCar.mesh, otherCar.mesh, impactPoint, otherCar);
 
-                    // Specific Traffic Physics
                     if (otherCar.velocity) {
                         this.applyCrashPhysics(this.currentCar.mesh, otherCar, impactPoint, otherCar.mesh.position);
                         otherCar.stunned = 2.0;
@@ -529,24 +530,20 @@ export class Player {
         // 3. Check Pedestrians
         if (this.pedestrianSystem && this.pedestrianSystem.peds) {
             for (const ped of this.pedestrianSystem.peds) {
-                if (ped.mesh.position.distanceTo(this.currentCar.mesh.position) > 25) continue;
+                const dist = ped.mesh.position.distanceTo(this.currentCar.mesh.position);
+                if (dist > 25) continue;
 
                 ped.mesh.updateMatrixWorld();
                 const pedBox = new THREE.Box3().setFromObject(ped.mesh);
 
-                if (carBox.intersectsBox(pedBox)) {
-                    // HIT PEDESTRIAN
+                if (carBox.intersectsBox(pedBox) || dist < 1.0) {
                     if (ped.state !== 'RAGDOLL') {
-                        console.log("HIT PEDESTRIAN!");
                         ped.state = 'RAGDOLL';
                         ped.ragdollTimer = 4.0;
-
-                        // Launch
                         const forward = new THREE.Vector3(0, 0, 1).applyEuler(this.currentCar.mesh.rotation);
                         const speed = Math.abs(this.carVelocity) || 20;
                         ped.velocity.copy(forward).multiplyScalar(speed * 0.8 + 5);
                         ped.velocity.y += 6;
-
                         if (this.effectSystem) this.effectSystem.createCrashEffect(ped.mesh.position);
                         return { hit: true, point: ped.mesh.position.clone(), object: ped };
                     }
@@ -558,16 +555,16 @@ export class Player {
         if (this.parkingSystem) {
             for (const otherCar of this.parkingSystem.cars) {
                 if (this.currentCar.mesh === otherCar) continue;
-                if (otherCar.position.distanceTo(this.currentCar.mesh.position) > 25) continue;
+
+                const dist = otherCar.position.distanceTo(this.currentCar.mesh.position);
+                if (dist > 25) continue;
 
                 otherCar.updateMatrixWorld();
                 const otherBox = new THREE.Box3().setFromObject(otherCar);
 
-                if (carBox.intersectsBox(otherBox)) {
-                    // HIT PARKED
-                    console.log("HIT PARKED!");
+                if (carBox.intersectsBox(otherBox) || dist < 3.5) {
+                    console.log("HIT PARKED! (Dist: " + dist.toFixed(2) + ")");
 
-                    // Wake up
                     if (!otherCar.userData.velocity) {
                         otherCar.userData.velocity = new THREE.Vector3();
                         otherCar.userData.angularVelocity = 0;
@@ -597,14 +594,14 @@ export class Player {
     applyCrashDamage(attackerMesh, victimMesh, impactPoint, victimStats) {
         // Deform Attacker
         attackerMesh.children.forEach(c => {
-            if (c.isMesh) deformMesh(c, impactPoint, 2.0, 0.8);
+            if (c.isMesh) deformMesh(c, impactPoint, 2.0, 1.0); // Stronger Dent
         });
 
         // Deform Victim
         victimMesh.children.forEach(c => {
             if (c.isMesh) {
                 if (!c.userData.isUnique) { c.geometry = c.geometry.clone(); c.userData.isUnique = true; }
-                deformMesh(c, impactPoint, 2.0, 0.8);
+                deformMesh(c, impactPoint, 2.0, 1.0);
             }
         });
 
@@ -612,31 +609,101 @@ export class Player {
         if (this.effectSystem) this.effectSystem.createCrashEffect(impactPoint);
 
         // Reduce Health
-        const speed = Math.abs(this.carVelocity);
-        const damage = speed * 0.5;
+        const speed = Math.abs(this.carVelocity) || 20;
+        const damage = speed * 1.5;
 
         // Attacker Health
         if (attackerMesh.userData.health !== undefined) attackerMesh.userData.health -= damage;
+
         // Victim Health (stats object)
-        if (victimStats.health !== undefined) victimStats.health -= damage;
+        if (victimStats.health !== undefined) {
+            victimStats.health -= damage;
+
+            // Visual Charring (Darken color significantly)
+            if (victimMesh) {
+                const burnFactor = 0.5; // DARKER!
+                victimMesh.traverse(c => {
+                    if (c.isMesh && c.material && c.material.color) {
+                        if (!c.userData.isUniqueMat) {
+                            c.material = c.material.clone();
+                            c.userData.isUniqueMat = true;
+                        }
+                        c.material.color.multiplyScalar(burnFactor);
+                    }
+                });
+            }
+
+            // Immediate Effect Trigger
+            if (victimStats.health < 60 && this.effectSystem) {
+                this.effectSystem.createSmokeEffect({ mesh: victimMesh });
+            }
+            if (victimStats.health <= 0) {
+                if (this.effectSystem) this.effectSystem.createFireEffect({ mesh: victimMesh });
+                // If Traffic Car (wrapper), stop it
+                if (victimStats.stunned !== undefined) victimStats.stunned = 999;
+            }
+        }
+    }
+
+    getMass(type) {
+        switch (type) {
+            case 'truck': return 4000;
+            case 'suv': return 2500;
+            case 'sedan': return 1600;
+            case 'sport': return 1200;
+            default: return 1500;
+        }
     }
 
     applyCrashPhysics(attackerMesh, victimPhysicsState, impactPoint, victimPosition) {
+        console.warn("APPLYING PHYSICS to", victimPhysicsState);
+
+        // 1. Mass Constants
+        const m1 = this.getMass('player');
+        const m2 = this.getMass(victimPhysicsState.type || 'sedan');
+
+        // 2. Linear Impulse
         const forward = new THREE.Vector3(0, 0, 1).applyEuler(attackerMesh.rotation);
-        const speed = Math.abs(this.carVelocity);
+        forward.y = 0; // STRICTLY HORIZONTAL - NO BOUNCE
+        forward.normalize();
 
-        // Linear
-        const force = forward.multiplyScalar(speed * 0.6);
-        victimPhysicsState.velocity.add(force);
+        const playerSpeed = Math.max(Math.abs(this.carVelocity), 8.0);
 
-        // Angular
+        // BALANCED REALISM
+        const massRatio = m1 / m2;
+        const impulseMagnitude = playerSpeed * massRatio * 1.2; // Slightly reduced force for weight
+
+        const impulse = forward.multiplyScalar(impulseMagnitude);
+        victimPhysicsState.velocity.add(impulse);
+
+        // Speed-Dependent Bounce (Lift)
+        // If speed > 25 (approx 50mph), start lifting
+        if (playerSpeed > 25) {
+            // physics: Force from bumper lifts the car?
+            const lift = (playerSpeed - 25) * 0.05; // Gentle scaling
+            victimPhysicsState.velocity.y += Math.min(lift, 2.0); // Cap at 2.0 (Realistic hop)
+
+            // Add slight randomness to bounce
+            victimPhysicsState.velocity.y += Math.random() * 0.2;
+        } else {
+            victimPhysicsState.velocity.y = 0; // Grounded at low/medium speed
+        }
+
+        // 3. Angular Impulse (Torque)
         const lever = new THREE.Vector3().subVectors(impactPoint, victimPosition);
-        const torque = new THREE.Vector3().crossVectors(lever, force);
-        victimPhysicsState.angularVelocity = torque.y * 0.1;
+        const torque = new THREE.Vector3().crossVectors(lever, impulse);
 
-        // Player Reaction (Bounce/Slow)
-        this.carVelocity *= 0.5;
-        this.shakeIntensity = 1.0;
+        const inertia = m2 * 0.001;
+        let wChange = torque.y / inertia;
+
+        wChange = THREE.MathUtils.clamp(wChange, -6, 6);
+
+        victimPhysicsState.angularVelocity = wChange;
+
+        // 4. Player Reaction
+        const recoilFactor = m2 / (m1 + m2);
+        this.carVelocity *= (1.0 - recoilFactor * 0.8);
+        this.shakeIntensity = Math.min(impulseMagnitude * 0.5, 3.0);
     }
 
     checkCollision() {

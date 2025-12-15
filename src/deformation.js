@@ -19,23 +19,24 @@ export function deformMesh(mesh, impactPoint, radius = 1.0, strength = 0.5) {
         const dist = vertex.distanceTo(localImpact);
 
         if (dist < radius) {
-            // Apply deformation: push vertex inward/randomly
-            // 1. Direction from impact to vertex
-            const direction = vertex.clone().sub(localImpact).normalize();
+            // Apply deformation: DENT INWARD
+            // Instead of random noise, we push the vertex towards the center of the car (crumple).
+            // Assuming car center is roughly (0,0,0) in local space, or we can use the mesh center.
+            const center = new THREE.Vector3(0, 0, 0); // Local center
 
-            // 2. Random variation to look like crumpled metal
-            const noise = (Math.random() - 0.5) * strength;
+            // "Crumple factor": closer to impact = more push
+            // But also add SOME noise for jagged edges
+            const crumpleAmt = strength * (1 - dist / radius) * 0.8; // Deeper Crumple
 
-            // 3. Push vertex
-            // We want a "dent", so usually push AWAY from impact force (in direction of impact velocity)
-            // But here we just simulate "crumple" by adding noise and contracting slightly towards center of damage
+            // Push towards center
+            vertex.lerp(center, crumpleAmt);
 
-            vertex.addScaledVector(direction, -strength * (1 - dist / radius)); // Dent IN towards impact center? No, that pulls.
-            // Let's just randomize it heavily within radius
-
-            vertex.x += (Math.random() - 0.5) * strength;
-            vertex.y += (Math.random() - 0.5) * strength;
-            vertex.z += (Math.random() - 0.5) * strength;
+            // Add JAGGERED noise for realism (torn metal)
+            // Function of position to be deterministic-ish but messy
+            const noiseScale = 0.5;
+            vertex.x += (Math.random() - 0.5) * strength * noiseScale;
+            vertex.y += (Math.random() - 0.5) * strength * noiseScale;
+            vertex.z += (Math.random() - 0.5) * strength * noiseScale;
 
             positions.setXYZ(i, vertex.x, vertex.y, vertex.z);
             damaged = true;

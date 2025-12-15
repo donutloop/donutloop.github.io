@@ -264,8 +264,8 @@ export class ParkingSystem {
                 car.position.add(car.userData.velocity.clone().multiplyScalar(delta));
                 car.rotation.y += (car.userData.angularVelocity || 0) * delta;
 
-                car.userData.velocity.multiplyScalar(0.95);
-                if (car.userData.angularVelocity) car.userData.angularVelocity *= 0.95;
+                car.userData.velocity.multiplyScalar(0.98);
+                if (car.userData.angularVelocity) car.userData.angularVelocity *= 0.98;
 
                 if (car.userData.velocity.length() < 0.1) {
                     car.userData.velocity = null;

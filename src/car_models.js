@@ -45,22 +45,21 @@ export function createCarMesh(type = 'sedan', color = null) {
         const width = 1.9;
         const chassisY = 0.4;
 
-        // Body (Sleek)
-        const chassis = new THREE.Mesh(new THREE.BoxGeometry(width, 0.6, length), paintMat);
+        // Body (Sleek) - Added segments
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(width, 0.6, length, 8, 4, 12), paintMat);
         chassis.position.y = chassisY + 0.1;
         chassis.castShadow = true;
         carGroup.add(chassis);
 
         // Cabin (Bubble)
-        const cabin = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 0.5, 2.0), paintMat);
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 0.5, 2.0, 6, 2, 6), paintMat);
         cabin.position.set(0, chassisY + 0.6, -0.2);
         carGroup.add(cabin);
 
         // Windshield (Visual Glass Block)
         const windshield = new THREE.Mesh(new THREE.BoxGeometry(width - 0.45, 0.3, 0.1), glassMat);
-        // Tilted slightly by checking rotation? No, just position block.
-        windshield.position.set(0, chassisY + 0.6, 0.8); // Front of cabin
-        windshield.rotation.x = -0.2; // Slant
+        windshield.position.set(0, chassisY + 0.6, 0.8);
+        windshield.rotation.x = -0.2;
         carGroup.add(windshield);
 
         // Spoiler
@@ -85,19 +84,19 @@ export function createCarMesh(type = 'sedan', color = null) {
         const chassisY = 1.2; // Higher ground clearance
 
         // Separate Cab & Bed for realism
-        // Cab
-        const cab = new THREE.Mesh(new THREE.BoxGeometry(width, 2.0, 2.5), paintMat); // Taller, deeper cab
+        // Cab - Segments added
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(width, 2.0, 2.5, 8, 4, 8), paintMat);
         cab.position.set(0, chassisY + 1.0, 1.5);
         cab.castShadow = true;
         carGroup.add(cab);
 
         // Windshield
         const windshield = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 1.0, 0.1), glassMat);
-        windshield.position.set(0, chassisY + 1.4, 2.8); // Front of cab
+        windshield.position.set(0, chassisY + 1.4, 2.8);
         carGroup.add(windshield);
 
-        // Bed
-        const bed = new THREE.Mesh(new THREE.BoxGeometry(width, 1.0, 4.5), paintMat); // Longer bed
+        // Bed - Segments added
+        const bed = new THREE.Mesh(new THREE.BoxGeometry(width, 1.0, 4.5, 8, 4, 12), paintMat);
         bed.position.set(0, chassisY + 0.5, -2.5);
         bed.castShadow = true;
         carGroup.add(bed);
@@ -119,15 +118,15 @@ export function createCarMesh(type = 'sedan', color = null) {
         const length = 4.6;
         const chassisY = 0.7;
 
-        // Unified Body (Range Rover style)
-        const body = new THREE.Mesh(new THREE.BoxGeometry(width, 1.2, length), paintMat);
+        // Unified Body - Segments
+        const body = new THREE.Mesh(new THREE.BoxGeometry(width, 1.2, length, 8, 4, 12), paintMat);
         body.position.set(0, chassisY + 0.6, 0);
         body.castShadow = true;
         carGroup.add(body);
 
         // Greenhouse (Upper Glass area)
         const glassStrip = new THREE.Mesh(new THREE.BoxGeometry(width + 0.05, 0.5, length - 1.5), glassMat);
-        glassStrip.position.set(0, chassisY + 1.0, -0.2); // Upper part
+        glassStrip.position.set(0, chassisY + 1.0, -0.2);
         carGroup.add(glassStrip);
 
         // Roof
@@ -153,14 +152,14 @@ export function createCarMesh(type = 'sedan', color = null) {
         const length = 4.2;
         const chassisY = 0.5;
 
-        // Base
-        const body = new THREE.Mesh(new THREE.BoxGeometry(width, 0.7, length), paintMat);
+        // Base - Segments
+        const body = new THREE.Mesh(new THREE.BoxGeometry(width, 0.7, length, 8, 4, 12), paintMat);
         body.position.y = chassisY + 0.1;
         body.castShadow = true;
         carGroup.add(body);
 
-        // Cabin
-        const cabin = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.6, 2.0), paintMat);
+        // Cabin - Segments
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.6, 2.0, 6, 2, 6), paintMat);
         cabin.position.set(0, chassisY + 0.6, -0.1);
         carGroup.add(cabin);
 
