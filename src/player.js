@@ -32,12 +32,6 @@ export class Player {
         this.velocity = new THREE.Vector3();
         this.direction = new THREE.Vector3();
 
-        // Reusable vectors for physics to reduce GC
-        this._forward = new THREE.Vector3();
-        this._camOffset = new THREE.Vector3();
-        this._targetPos = new THREE.Vector3();
-        this._tempVec = new THREE.Vector3();
-
         this.init();
     }
 
@@ -436,9 +430,15 @@ export class Player {
         }
 
         // Apply Velocity
-        this._forward.set(0, 0, 1).applyEuler(this.currentCar.mesh.rotation);
+        const forward = new THREE.Vector3(0, 0, 1); // Assuming cars face +Z or +X initially? 
+        // Traffic cars: axis 'x' -> rotated Y by +/- PI/2. axis 'z' -> Y 0 or PI.
+        // Wait, if rotation 0 is +Z, then PI/2 is +X.
+        // So yes, forward vector (0,0,1) rotated by PI/2 is (1,0,0).
+        // So standard forward is (0,0,1).
 
-        this.currentCar.mesh.position.addScaledVector(this._forward, this.carVelocity * delta);
+        forward.applyEuler(this.currentCar.mesh.rotation);
+
+        this.currentCar.mesh.position.add(forward.multiplyScalar(this.carVelocity * delta));
 
         // Check for collisions after moving
         const crash = this.checkCarCollision();
@@ -446,7 +446,7 @@ export class Player {
             // Collision response
 
             // 1. Move back to un-clip
-            this.currentCar.mesh.position.addScaledVector(this._forward, -this.carVelocity * delta);
+            this.currentCar.mesh.position.add(forward.multiplyScalar(-this.carVelocity * delta));
 
             // 2. Calculate Intensity based on speed
             const speed = Math.abs(this.carVelocity);
@@ -455,9 +455,7 @@ export class Player {
             // 3. Trigger Visual/Audio Effects
             if (this.effectSystem && speed > 5) {
                 // Approximate contact point (front of car)
-                // Reuse temp vec
-                const contactPoint = this._tempVec.copy(this.currentCar.mesh.position).addScaledVector(this._forward, 2);
-
+                const contactPoint = this.currentCar.mesh.position.clone().add(forward.multiplyScalar(2));
                 this.effectSystem.createCrashEffect(contactPoint);
 
                 // DEFORMATION
@@ -469,7 +467,8 @@ export class Player {
                 // DAMAGE CALCULATION
                 // Reduce health
                 const damage = speed * 0.5; // e.g. 40 speed = 20 damage. 5 hits to kill.
-                // this.currentCar.mesh.userData.health -= damage;
+                this.currentCar.mesh.userData.health -= damage;
+                console.log(`Crash! Speed: ${speed.toFixed(1)}, Damage: ${damage.toFixed(1)}, Health: ${this.currentCar.mesh.userData.health.toFixed(1)}`);
 
                 // physics effect
                 if (speed > 10) {
@@ -489,19 +488,20 @@ export class Player {
 
         // Update Camera to follow car
         // Third person view
-        this._camOffset.set(0, 5, -10).applyEuler(this.currentCar.mesh.rotation);
+        const camOffset = new THREE.Vector3(0, 5, -10); // Behind and up
+        camOffset.applyEuler(this.currentCar.mesh.rotation);
 
         // Apply Shake Offset
         if (this.shakeIntensity > 0) {
-            this._camOffset.x += (Math.random() - 0.5) * this.shakeIntensity;
-            this._camOffset.y += (Math.random() - 0.5) * this.shakeIntensity;
-            this._camOffset.z += (Math.random() - 0.5) * this.shakeIntensity;
+            camOffset.x += (Math.random() - 0.5) * this.shakeIntensity;
+            camOffset.y += (Math.random() - 0.5) * this.shakeIntensity;
+            camOffset.z += (Math.random() - 0.5) * this.shakeIntensity;
         }
 
-        this._targetPos.copy(this.currentCar.mesh.position).add(this._camOffset);
+        const targetPos = this.currentCar.mesh.position.clone().add(camOffset);
 
         // Smooth follow
-        this.camera.position.lerp(this._targetPos, 5 * delta);
+        this.camera.position.lerp(targetPos, 5 * delta);
         this.camera.lookAt(this.currentCar.mesh.position);
     }
 
@@ -531,6 +531,7 @@ export class Player {
 
                 // HYBRID COLLISION: Box OR Sphere (Distance < 3.5)
                 if (carBox.intersectsBox(otherBox) || dist < 3.5) {
+                    console.log("HIT TRAFFIC! (Dist: " + dist.toFixed(2) + ")");
 
                     const impactPoint = this.getImpactPoint(this.currentCar.mesh, otherCar.mesh);
                     this.applyCrashDamage(this.currentCar.mesh, otherCar.mesh, impactPoint, otherCar);
@@ -580,8 +581,8 @@ export class Player {
                 otherCar.updateMatrixWorld();
                 const otherBox = new THREE.Box3().setFromObject(otherCar);
 
-
                 if (carBox.intersectsBox(otherBox) || dist < 3.5) {
+                    console.log("HIT PARKED! (Dist: " + dist.toFixed(2) + ")");
 
                     if (!otherCar.userData.velocity) {
                         otherCar.userData.velocity = new THREE.Vector3();
@@ -674,6 +675,7 @@ export class Player {
     }
 
     applyCrashPhysics(attackerMesh, victimPhysicsState, impactPoint, victimPosition) {
+        console.warn("APPLYING PHYSICS to", victimPhysicsState);
 
         // 1. Mass Constants
         const m1 = this.getMass('player');
