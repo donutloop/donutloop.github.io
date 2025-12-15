@@ -132,7 +132,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.11.0 - SMART PARKING';
+        verDiv.innerHTML = 'v5.12.0 - PARKING OPTIMIZATION';
         document.body.appendChild(verDiv);
 
         animate(() => {
