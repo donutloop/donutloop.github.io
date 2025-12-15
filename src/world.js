@@ -189,13 +189,13 @@ function createProceduralTree(type, x, z, chunkGroup) {
             // Branch out
             // Droop down
             const tendril = new THREE.Mesh(treeGeom.branch, matCache.leafTeal); // Teal for style
-            tendril.position.set(lx, h + 1, lz);
+            tendril.position.set(lx, trunkH + 1, lz);
             tendril.scale.set(0.2, 3.0, 0.2);
             tendril.rotation.x = Math.PI; // Point downish
             treeGroup.add(tendril);
         }
         const cap = new THREE.Mesh(treeGeom.sphere, matCache.leafLightGreen);
-        cap.position.set(0, h + 1, 0);
+        cap.position.set(0, trunkH + 1, 0);
         cap.scale.set(2.5, 1.5, 2.5);
         cap.castShadow = true; cap.receiveShadow = true;
         treeGroup.add(cap);
