@@ -59,6 +59,8 @@ export class ParkingSystem {
         if (this.chunkCars.has(key)) {
             const cars = this.chunkCars.get(key);
             cars.forEach(car => {
+                if (car.isPlayerDriven) return; // Player has stolen this car
+
                 this.scene.remove(car);
                 disposeCar(car); // Dispose resources
 

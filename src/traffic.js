@@ -62,6 +62,12 @@ export class TrafficSystem {
         if (this.chunkCars.has(key)) {
             const chunkCars = this.chunkCars.get(key);
             chunkCars.forEach(car => {
+                if (car.isPlayerDriven) {
+                    // Start of 'Hero Car' arc.
+                    // Player owns it now. Do not destroy.
+                    // It remains in this.cars so traffic avoids it, which is correct.
+                    return;
+                }
                 this.scene.remove(car.mesh);
                 disposeCar(car.mesh); // Dispose resources
                 // Remove from flat list
