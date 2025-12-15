@@ -66,7 +66,9 @@ export class TrafficSystem {
                     // actually simpler to just wrap within whole chunk 34x34
                     chunkX: xOffset,
                     chunkZ: zOffset,
-                    chunkSize: chunkSize
+                    chunkSize: chunkSize,
+                    cx: cx, // Store Indices for migration
+                    cz: cz
                 });
             } else {
                 // Clean up if spawns in intersection (roughly, though we should really check inside spawnCarInChunk)
@@ -220,18 +222,39 @@ export class TrafficSystem {
 
                 if (car.axis === 'x') {
                     car.mesh.position.x += move;
-                    // Wrap within chunk
-                    const localX = car.mesh.position.x - car.chunkX;
-                    const bound = car.chunkSize / 2;
-                    if (localX > bound) car.mesh.position.x -= car.chunkSize;
-                    else if (localX < -bound) car.mesh.position.x += car.chunkSize;
                 } else {
                     car.mesh.position.z += move;
-                    // Wrap within chunk
-                    const localZ = car.mesh.position.z - car.chunkZ;
-                    const bound = car.chunkSize / 2;
-                    if (localZ > bound) car.mesh.position.z -= car.chunkSize;
-                    else if (localZ < -bound) car.mesh.position.z += car.chunkSize;
+                }
+
+                // MIGRATION: Update Chunk Ownership
+                // If car drives into a new chunk, move it to that chunk's list.
+                // This prevents it from being deleted when the OLD chunk unloads, 
+                // and ensures it IS deleted when the NEW chunk unloads.
+
+                const newCx = Math.round(car.mesh.position.x / car.chunkSize);
+                const newCz = Math.round(car.mesh.position.z / car.chunkSize);
+
+                if (newCx !== car.cx || newCz !== car.cz) {
+                    // 1. Remove from old
+                    const oldKey = `${car.cx},${car.cz}`;
+                    if (this.chunkCars.has(oldKey)) {
+                        const list = this.chunkCars.get(oldKey);
+                        const idx = list.indexOf(car);
+                        if (idx > -1) list.splice(idx, 1);
+                    }
+
+                    // 2. Add to new
+                    const newKey = `${newCx},${newCz}`;
+                    if (!this.chunkCars.has(newKey)) {
+                        this.chunkCars.set(newKey, []);
+                    }
+                    this.chunkCars.get(newKey).push(car);
+
+                    // 3. Update Car Data
+                    car.cx = newCx;
+                    car.cz = newCz;
+                    car.chunkX = newCx * car.chunkSize; // Update center ref if needed
+                    car.chunkZ = newCz * car.chunkSize;
                 }
             });
         }
