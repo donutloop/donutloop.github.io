@@ -18,6 +18,9 @@ export class ChunkManager {
 
         // Seed randomness
         this.noise = SimplexNoise;
+
+        this.cachedColliders = [];
+        this.dirty = true;
     }
 
     update() {
@@ -156,6 +159,7 @@ export class ChunkManager {
         if (chunkData.mesh) this.scene.add(chunkData.mesh);
 
         this.chunks.set(`${cx},${cz}`, chunkData);
+        this.dirty = true;
     }
 
     unloadChunk(id) {
@@ -177,27 +181,25 @@ export class ChunkManager {
             if (this.trafficLightSystem) this.trafficLightSystem.unloadChunk(cx, cz);
         }
         this.chunks.delete(id);
+        this.dirty = true;
     }
 
     getColliders() {
+        if (!this.dirty) return this.cachedColliders;
+
         // Gather all colliders from active chunks
-        let allColliders = [];
+        this.cachedColliders = [];
         for (const chunk of this.chunks.values()) {
             if (chunk.colliders) {
-                allColliders = allColliders.concat(chunk.colliders);
+                // Use push with spread for performance instead of concat
+                this.cachedColliders.push(...chunk.colliders);
             }
         }
 
-        // Add Parking colliders (they are dynamic but static relative to physics)
-        if (this.parkingSystem) {
-            const parkingColliders = this.parkingSystem.getColliders();
-            allColliders = allColliders.concat(parkingColliders);
-        }
-        if (this.trafficSystem) {
-            const trafficColliders = this.trafficSystem.getColliders();
-            allColliders = allColliders.concat(trafficColliders);
-        }
+        // REMOVED: Redundant Traffic/Parking checks. 
+        // Player already checks these systems directly.
 
-        return allColliders;
+        this.dirty = false;
+        return this.cachedColliders;
     }
 }
