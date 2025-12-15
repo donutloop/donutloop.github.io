@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { initScene, animate } from './scene.js';
 import { createWorld } from './world.js?v=FIX_MATS_3';
-import { Player } from './player.js?v=WORLDLOOP_1';
+import { Player } from './player.js?v=SAFE_EXIT_1';
 import { TrafficSystem } from './traffic.js?v=FIX_CAR_DESPAWN';
 import { WeatherSystem } from './weather.js?v=100';
 import { PedestrianSystem } from './pedestrians.js?v=100';
@@ -132,7 +132,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.2 - STABLE RIDE';
+        verDiv.innerHTML = 'v5.3.1 - SMART EXIT';
         document.body.appendChild(verDiv);
 
         animate(() => {

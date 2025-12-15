@@ -296,11 +296,39 @@ export class Player {
             this.colliders.push(newBox);
         }
 
-        // Place player slightly to the side
-        const offset = new THREE.Vector3(3, 0, 0);
-        offset.applyEuler(this.currentCar.mesh.rotation);
-        this.camera.position.copy(this.currentCar.mesh.position).add(offset);
-        this.camera.position.y = 2; // Reset height
+        // Check multiple exit points to find a safe spot
+        // Left, Right, Back, Front
+        const checkOffsets = [
+            new THREE.Vector3(3, 0, 0),
+            new THREE.Vector3(-3, 0, 0),
+            new THREE.Vector3(0, 0, -4),
+            new THREE.Vector3(0, 0, 4)
+        ];
+
+        let safePos = null;
+        const originalPos = this.camera.position.clone();
+
+        for (const off of checkOffsets) {
+            off.applyEuler(this.currentCar.mesh.rotation);
+            const testPos = this.currentCar.mesh.position.clone().add(off);
+            testPos.y = 2; // Player height
+
+            // Temporarily move camera to test collision
+            this.camera.position.copy(testPos);
+            if (!this.checkCollision()) {
+                safePos = testPos;
+                break;
+            }
+        }
+
+        if (safePos) {
+            this.camera.position.copy(safePos);
+        } else {
+            // Emergency fallback: Spawn on top of car/roof
+            console.warn("No safe exit found on ground, spawning on top.");
+            this.camera.position.copy(this.currentCar.mesh.position);
+            this.camera.position.y = 5;
+        }
 
         this.currentCar = null;
         console.log("Exited car");
