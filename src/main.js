@@ -3,7 +3,7 @@ import { initScene, animate } from './scene.js';
 import { createWorld } from './world.js?v=WORLDLOOP_5.13.11';
 import { Player } from './player.js?v=WORLDLOOP_5.13.11';
 import { TrafficSystem } from './traffic.js?v=WORLDLOOP_5.13.11';
-import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.13.11';
+import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.14.0';
 import { PedestrianSystem } from './pedestrians.js?v=WORLDLOOP_5.13.11';
 import { ParkingSystem } from './parking.js?v=WORLDLOOP_5.13.11';
 import { AirplaneSystem } from './airplanes.js';
@@ -134,7 +134,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.13.11 - SUBTLE PHYSICS';
+        verDiv.innerHTML = 'v5.14.2 - INFINITE SKY';
         document.body.appendChild(verDiv);
 
         animate(() => {
@@ -154,8 +154,10 @@ async function init() {
                 if (player) player.update(delta);
                 if (trafficSystem) trafficSystem.update(delta);
                 if (trafficLightSystem) trafficLightSystem.update(delta);
-                if (weatherSystem) weatherSystem.update(delta);
-                if (pedestrianSystem) pedestrianSystem.update(delta);
+                if (weatherSystem) {
+                    const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
+                    weatherSystem.update(delta, playerPos);
+                } if (pedestrianSystem) pedestrianSystem.update(delta);
                 if (airplaneSystem) airplaneSystem.update(delta);
 
                 // Update Effects
