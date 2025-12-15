@@ -6,8 +6,8 @@ let scene, camera, renderer, controls;
 
 export function initScene() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111); // Darker background usually looks more premium initialy
-    scene.fog = new THREE.FogExp2(0x111111, 0.02);
+    scene.background = new THREE.Color(0x050510); // Deep Blue Night/Dusk
+    scene.fog = new THREE.FogExp2(0x050510, 0.025); // Dense urban haze
 
 
 

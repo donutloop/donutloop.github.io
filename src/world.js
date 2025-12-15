@@ -1,742 +1,581 @@
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
-const buildingGeom = new THREE.BoxGeometry(1, 1, 1);
-const windowGeom = new THREE.PlaneGeometry(1.2, 1.8);
-const sidewalkGeom = new THREE.BoxGeometry(1, 0.2, 1); // Normalized size for scaling
-const roadGeom = new THREE.PlaneGeometry(1, 1);
+// --- GEOMETRY UTILS ---
 
-// Materials (SharedCache)
-// Materials (SharedCache)
-// Setup Procedural Textures
-function createSignTexture(text, color, bgColor) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-
-    // Background
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, 256, 64);
-
-    // Text
-    ctx.fillStyle = color;
-    ctx.font = 'bold 40px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 128, 32);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    return tex;
+function box(w, h, d, x, y, z) {
+    const g = new THREE.BoxGeometry(w, h, d);
+    g.translate(x, y, z);
+    return g;
 }
 
-const matCache = {
-    road: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }),
-    sidewalk: new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 }),
-    building: new THREE.MeshStandardMaterial({ color: 0x707070, roughness: 0.2, metalness: 0.5 }), // Fallback (Granite)
-    window: new THREE.MeshBasicMaterial({ color: 0x111111 }), // Default OFF (Dark Grey)
-    lane: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-    ground: new THREE.MeshStandardMaterial({ color: 0x3a2e26, roughness: 1.0 }),
-    // NYC Materials
-    stoneA: new THREE.MeshStandardMaterial({ color: 0xE5DCC3, roughness: 0.9 }), // Limestone
-    stoneB: new THREE.MeshStandardMaterial({ color: 0xC2B280, roughness: 0.9 }), // Warm Stone/Sandstone
-    glassBlue: new THREE.MeshStandardMaterial({ color: 0x4A6B8A, roughness: 0.05, metalness: 0.9, envMapIntensity: 1.0 }), // Classic Slate Glass
-    glassBlack: new THREE.MeshStandardMaterial({ color: 0x2C3539, roughness: 0.05, metalness: 0.9, envMapIntensity: 1.0 }), // Modern Gunmetal Glass
-    metalGold: new THREE.MeshStandardMaterial({ color: 0xCFB53B, roughness: 0.1, metalness: 1.0, envMapIntensity: 1.0 }), // Art Deco Brass
-    brick: new THREE.MeshStandardMaterial({ color: 0x8D4E3C, roughness: 0.9 }), // Brownstone / Red Brick
-    cyberDark: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.8, envMapIntensity: 0.8 }), // Sleek metal
-    neonPink: new THREE.MeshBasicMaterial({ color: 0xff00ff }),
-    neonCyan: new THREE.MeshBasicMaterial({ color: 0x00ffff }),
-    roof: new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 1.0 }),
-    marketSign: new THREE.MeshBasicMaterial({ map: createSignTexture('MARKET', '#ffffff', '#0088aa') }),
-    gate: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.4, metalness: 0.9 }),
-    frameSilver: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.9 }),
-    frameBlack: new THREE.MeshStandardMaterial({ color: 0x1B1B1B, roughness: 0.8 }), // Cast Iron
-    // Tree Materials
-    trunkBrown: new THREE.MeshStandardMaterial({ color: 0x553311, roughness: 0.9 }),
-    trunkWhite: new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8 }),
-    trunkGrey: new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 1.0 }),
-    trunkBlack: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }),
-    leafGreen: new THREE.MeshStandardMaterial({ color: 0x4da737, roughness: 0.8 }),
-    leafDarkGreen: new THREE.MeshStandardMaterial({ color: 0x225522, roughness: 0.9 }),
-    leafLightGreen: new THREE.MeshStandardMaterial({ color: 0x88cc44, roughness: 0.8 }),
-    leafPink: new THREE.MeshStandardMaterial({ color: 0xffaacc, roughness: 0.8 }), // Softer pink
-    leafOrange: new THREE.MeshStandardMaterial({ color: 0xdd7722, roughness: 0.8 }), // Muted orange
-    leafRed: new THREE.MeshStandardMaterial({ color: 0xaa3333, roughness: 0.8 }), // Maple Red
-    leafYellow: new THREE.MeshStandardMaterial({ color: 0xddcc22, roughness: 0.8 }), // Birch Yellow
-    dirt: new THREE.MeshStandardMaterial({ color: 0x5b4033, roughness: 1.0 }),
-    cloud: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true, transparent: true, opacity: 0.9 })
-};
+// --- MATERIALS ---
 
-const treeGeom = {
-    trunk: new THREE.CylinderGeometry(0.2, 0.3, 1, 7),
-    branch: new THREE.CylinderGeometry(0.1, 0.15, 1, 5),
-    sphere: new THREE.IcosahedronGeometry(1, 1),
-    cone: new THREE.ConeGeometry(1, 1, 7),
-    box: new THREE.BoxGeometry(1, 1, 1)
-};
+// High Quality PBR Materials
+const matConcrete = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9, metalness: 0.1 });
+const matConcreteDark = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9, metalness: 0.15 });
+const matConcreteLight = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.8, metalness: 0.05 });
+const matBrick = new THREE.MeshStandardMaterial({ color: 0x8d4e3c, roughness: 0.9 });
+const matGlassModern = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.1, metalness: 0.9, envMapIntensity: 1.5 });
+const matGlassOffice = new THREE.MeshStandardMaterial({ color: 0x334455, roughness: 0.2, metalness: 0.8 });
+const matMetal = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.4, metalness: 0.8 });
+const matDarkMetal = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7, metalness: 0.5 });
+const matNeonCyan = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+const matNeonPink = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+const matRoad = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+const matSidewalk = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 });
+const matGround = new THREE.MeshStandardMaterial({ color: 0x3a2e26, roughness: 1.0 });
+const matLane = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const matCloud = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true, opacity: 0.8 });
+const matLight = new THREE.MeshBasicMaterial({ color: 0xffffaa }); // Streetlight bulb
 
-// Adjust pivot for trunk to be at bottom
-treeGeom.trunk.translate(0, 0.5, 0);
-treeGeom.branch.translate(0, 0.5, 0);
-treeGeom.cone.translate(0, 0.5, 0);
+// Tree Materials
+const matTrunkBrown = new THREE.MeshStandardMaterial({ color: 0x553311, roughness: 0.9, name: 'trunkBrown' });
+const matTrunkWhite = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8, name: 'trunkWhite' });
+const matLeafGreen = new THREE.MeshStandardMaterial({ color: 0x4da737, roughness: 0.8, name: 'leafGreen' });
+const matLeafDark = new THREE.MeshStandardMaterial({ color: 0x225522, roughness: 0.9, name: 'leafDark' });
+const matLeafPink = new THREE.MeshStandardMaterial({ color: 0xffaacc, roughness: 0.8, name: 'leafPink' });
+const matLeafOrange = new THREE.MeshStandardMaterial({ color: 0xdd7722, roughness: 0.8, name: 'leafOrange' });
+const matLeafYellow = new THREE.MeshStandardMaterial({ color: 0xddcc22, roughness: 0.8, name: 'leafYellow' });
+const matLeafGrey = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1.0 }); // Fallback
+const matDirt = new THREE.MeshStandardMaterial({ color: 0x5b4033, roughness: 1.0 });
+const matTrunkGrey = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.9, name: 'trunkGrey' });
+const matTrunkBlack = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, name: 'trunkBlack' });
 
-function createProceduralTree(type, x, z, chunkGroup) {
-    const treeGroup = new THREE.Group();
-    treeGroup.position.set(x, 0, z);
+// Tree Geometry Helpers (Reused to avoid allocations)
+const geomTrunk = new THREE.CylinderGeometry(0.2, 0.3, 1, 5);
+geomTrunk.translate(0, 0.5, 0);
+const geomSphere = new THREE.IcosahedronGeometry(1, 1);
+const geomCone = new THREE.ConeGeometry(1, 1, 5);
+geomCone.translate(0, 0.5, 0);
 
-    let trunkMat = matCache.trunkBrown;
-    let leafMat = matCache.leafGreen;
-    let trunkH = 3;
+// --- BUILDERS ---
+
+function createBuildingMesh(width, height, depth, style) {
+    // Geometry Collections (for merging)
+    const geoms = {
+        concrete: [],
+        concreteDark: [],
+        concreteLight: [],
+        brick: [],
+        glass: [],
+        metal: [],
+        darkMetal: [],
+        neon: [],
+        // Vegetation
+        trunkBrown: [],
+        trunkWhite: [],
+        leafGreen: [],
+        leafDark: [],
+        leafPink: [],
+        leafOrange: [],
+        leafYellow: [],
+        dirt: [],
+        trunkGrey: [],
+        trunkBlack: []
+    };
+
+    // 1. Structure
+    if (style === 'modern') {
+        buildModernTower(width, height, depth, geoms);
+    } else if (style === 'brick') {
+        buildBrickApartment(width, height, depth, geoms);
+    } else if (style === 'glass') {
+        buildGlassTower(width, height, depth, geoms);
+    } else if (style === 'future') {
+        buildCyberTower(width, height, depth, geoms);
+    } else {
+        buildModernTower(width, height, depth, geoms); // Fallback
+    }
+
+    // 2. Rooftop Details (General)
+    addRooftopDetails(width, height, depth, geoms);
+
+    // 3. Merge & Create Group
+    const group = new THREE.Group();
+
+    const add = (arr, mat) => {
+        if (arr.length > 0) {
+            const merged = BufferGeometryUtils.mergeGeometries(arr);
+            const mesh = new THREE.Mesh(merged, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+        }
+    };
+
+    add(geoms.concrete, matConcrete);
+    add(geoms.concreteDark, matConcreteDark);
+    add(geoms.concreteLight, matConcreteLight);
+    add(geoms.brick, matBrick);
+    add(geoms.glass, style === 'glass' ? matGlassModern : matGlassOffice);
+    add(geoms.metal, matMetal);
+    add(geoms.darkMetal, matDarkMetal);
+    add(geoms.neon, Math.random() > 0.5 ? matNeonCyan : matNeonPink);
+
+    // Vegetation Merging
+    add(geoms.trunkBrown, matTrunkBrown);
+    add(geoms.trunkWhite, matTrunkWhite);
+    add(geoms.leafGreen, matLeafGreen);
+    add(geoms.leafDark, matLeafDark);
+    add(geoms.leafPink, matLeafPink);
+    add(geoms.leafOrange, matLeafOrange);
+    add(geoms.leafYellow, matLeafYellow);
+    add(geoms.dirt, matDirt);
+    add(geoms.trunkGrey, matTrunkGrey);
+    add(geoms.trunkBlack, matTrunkBlack);
+
+    return group;
+}
+
+function createProceduralCloudMesh() {
+    // Generate multi-blob cloud geometry
+    const geoms = [];
+    const blobs = 5 + Math.floor(Math.random() * 5);
+    const spread = 20;
+
+    for (let i = 0; i < blobs; i++) {
+        const s = 10 + Math.random() * 15;
+        const x = (Math.random() - 0.5) * spread;
+        const y = (Math.random() - 0.5) * spread * 0.4;
+        const z = (Math.random() - 0.5) * spread * 0.6;
+        geoms.push(box(s, s * 0.6, s * 0.8, x, y, z));
+    }
+
+    if (geoms.length === 0) return null;
+    const merged = BufferGeometryUtils.mergeGeometries(geoms);
+    const mesh = new THREE.Mesh(merged, matCloud);
+    mesh.castShadow = true;
+    return mesh;
+}
+
+function addTreeToGeoms(type, x, z, geoms) {
+    // 1. Dirt Patch
+    geoms.dirt.push(box(1.5, 0.1, 1.5, x, 0.1, z));
+
+    // 2. Trunk & Leaves
+    const rand = Math.random();
+    let trunkH = 2.5 + rand;
     let trunkR = 0.3;
-    let leafH = 0; // if 0, sphere
-    let leafR = 1.5;
+    let leafScale = 1.5;
 
-    // Custom Geometry Config
-    if (type === 0) { // Oak
-        trunkMat = matCache.trunkBrown;
-        leafMat = matCache.leafGreen;
-        trunkH = 2.5;
-        leafR = 1.8;
+    const addMesh = (geom, matName, posY, scale, rotY = 0) => {
+        const g = geom.clone();
+        g.scale(scale.x, scale.y, scale.z);
+        g.rotateY(rotY);
+        g.translate(x, posY, z);
+        geoms[matName].push(g);
+    };
+
+    if (type === 0) { // Oak (Basic)
+        addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.3, trunkH, 0.3));
+        addMesh(geomSphere, 'leafGreen', trunkH, new THREE.Vector3(1.8, 1.8, 1.8));
     } else if (type === 1) { // Pine
-        trunkMat = matCache.trunkBrown;
-        leafMat = matCache.leafDarkGreen;
-        trunkH = 2;
-    } else if (type === 2) { // Birch
-        trunkMat = matCache.trunkWhite;
-        leafMat = matCache.leafYellow; // Autumn/Yellowish
-        trunkH = 4;
-        trunkR = 0.2;
-        leafR = 1.6;
-    } else if (type === 3) { // Cherry
-        trunkMat = matCache.trunkBrown;
-        leafMat = matCache.leafPink; // Realistic Sakura
-        trunkH = 3;
-        leafR = 1.6;
-    } else if (type === 4) { // Autumn
-        trunkMat = matCache.trunkGrey;
-        leafMat = matCache.leafOrange;
-        trunkH = 3;
-        leafR = 1.7;
-    } else if (type === 5) { // Palm
-        trunkMat = matCache.trunkBrown;
-        leafMat = matCache.leafGreen;
-        trunkH = 5;
-        trunkR = 0.2;
-    } else if (type === 6) { // Shrub
-        trunkMat = matCache.trunkBrown;
-        trunkH = 0.5;
-        leafR = 1.0;
-    } else if (type === 7) { // Maple (Was Dead)
-        trunkMat = matCache.trunkGrey;
-        leafMat = matCache.leafRed;
-        trunkH = 3;
-        leafR = 1.8;
-    } else if (type === 8) { // Poplar (Was Cyber)
-        trunkMat = matCache.trunkBlack; // Dark Bark
-        leafMat = matCache.leafDarkGreen;
-        trunkH = 4.5;
-        trunkR = 0.25;
-        // Tall thin
-    } else if (type === 9) { // Willow
-        trunkMat = matCache.trunkBrown;
-        leafMat = matCache.leafLightGreen; // Natural Light Green
-        trunkH = 2.5;
-        leafR = 2.0;
-    }
-
-    // Build Mesh
-    const trunk = new THREE.Mesh(treeGeom.trunk, trunkMat);
-    trunk.scale.set(trunkR, trunkH, trunkR);
-    trunk.castShadow = true;
-    treeGroup.add(trunk);
-
-    if (type === 1) { // Pine Cone
-        // ... (Same logic, simplified geometry call checks)
-        const l1 = new THREE.Mesh(treeGeom.cone, leafMat);
-        l1.position.y = trunkH;
-        l1.scale.set(2, 1.5, 2);
-        treeGroup.add(l1);
-        const l2 = new THREE.Mesh(treeGeom.cone, leafMat);
-        l2.position.y = trunkH + 1.2;
-        l2.scale.set(1.5, 1.5, 1.5);
-        treeGroup.add(l2);
-        const l3 = new THREE.Mesh(treeGeom.cone, leafMat);
-        l3.position.y = trunkH + 2.2;
-        l3.scale.set(0.8, 1.5, 0.8);
-        treeGroup.add(l3);
-
-    } else if (type === 5) { // Palm
-        for (let i = 0; i < 6; i++) {
-            const f = new THREE.Mesh(treeGeom.branch, leafMat);
-            f.position.y = trunkH;
-            f.scale.set(0.5, 3.0, 0.5);
-            f.rotation.y = (Math.PI / 3) * i;
-            f.rotation.z = 1.0; // Droop out
-            treeGroup.add(f);
-        }
-    } else if (type === 8) { // Poplar (Tall Column)
-        const l = new THREE.Mesh(treeGeom.cone, leafMat);
-        l.position.y = trunkH - 1;
-        l.scale.set(1.2, 5, 1.2);
-        treeGroup.add(l);
-    } else if (type === 9) { // Willow
+        addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.2, 2, 0.2));
+        addMesh(geomCone, 'leafDark', 2, new THREE.Vector3(2, 1.5, 2));
+        addMesh(geomCone, 'leafDark', 3.2, new THREE.Vector3(1.5, 1.5, 1.5));
+        addMesh(geomCone, 'leafDark', 4.4, new THREE.Vector3(0.8, 1.5, 0.8));
+    } else if (type === 2) { // Birch (Green)
+        addMesh(geomTrunk, 'trunkWhite', 0, new THREE.Vector3(0.2, 4, 0.2));
+        addMesh(geomSphere, 'leafGreen', 4, new THREE.Vector3(1.6, 2, 1.6));
+    } else if (type === 3) { // Oak Variant (Was Sakura)
+        addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.25, 3, 0.25));
+        addMesh(geomSphere, 'leafGreen', 3, new THREE.Vector3(2, 2, 2));
+    } else if (type === 4) { // Poplar (Tall)
+        addMesh(geomTrunk, 'trunkBlack', 0, new THREE.Vector3(0.25, 4.5, 0.25));
+        addMesh(geomCone, 'leafDark', 3.5, new THREE.Vector3(1.2, 5, 1.2));
+    } else if (type === 5) { // Willow
+        addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.3, 2.5, 0.3));
+        addMesh(geomSphere, 'leafGreen', 2.5, new THREE.Vector3(2.5, 1.5, 2.5));
         // Drooping tendrils
-        const count = 12;
+        const count = 8;
         for (let i = 0; i < count; i++) {
-            const r = 2.0;
-            const ang = (i / count) * Math.PI * 2;
-            const lx = Math.sin(ang) * r;
-            const lz = Math.cos(ang) * r;
-            // Branch out
-            // Droop down
-            const tendril = new THREE.Mesh(treeGeom.branch, matCache.leafTeal); // Teal for style
-            tendril.position.set(lx, trunkH + 1, lz);
-            tendril.scale.set(0.2, 3.0, 0.2);
-            tendril.rotation.x = Math.PI; // Point downish
-            treeGroup.add(tendril);
+            const angle = (i / count) * Math.PI * 2;
+            const tx = Math.sin(angle) * 1.5;
+            const tz = Math.cos(angle) * 1.5;
+            addMesh(geomSphere, 'leafGreen', 2.0, new THREE.Vector3(0.1, 2.0, 0.1), 0); // Using Sphere for tendril consistency
+            // Manual rotation for tendrils is hard without a proper rotation matrix in addMesh
+            // Simplified: Just vertical tendrils around the edge
+            const tGeom = geomSphere.clone();
+            tGeom.scale(0.1, 2.5, 0.1);
+            tGeom.translate(x + tx, 1.5, z + tz); // Hang down from 2.5 to 0.5ish
+            geoms.leafGreen.push(tGeom);
         }
-        const cap = new THREE.Mesh(treeGeom.sphere, matCache.leafLightGreen);
-        cap.position.set(0, trunkH + 1, 0);
-        cap.scale.set(2.5, 1.5, 2.5);
-        cap.castShadow = true; cap.receiveShadow = true;
-        treeGroup.add(cap);
     } else {
-        // --- Cyber / Default (Fallback) ---
-        const t = new THREE.Mesh(treeGeom.trunk, matCache.trunkBlack);
-        t.scale.set(1, 3, 1);
-        t.castShadow = true; t.receiveShadow = true;
-        treeGroup.add(t);
-
-        const l = new THREE.Mesh(treeGeom.box, matCache.leafNeon);
-        l.position.y = 3;
-        l.scale.set(1.5, 1.5, 1.5);
-        l.castShadow = true; l.receiveShadow = true;
-        treeGroup.add(l);
+        // Bushy (Was Autumn)
+        addMesh(geomTrunk, 'trunkGrey', 0, new THREE.Vector3(0.3, 3, 0.3));
+        addMesh(geomSphere, 'leafDark', 3, new THREE.Vector3(1.7, 1.7, 1.7)); // Dark Green Leaves
     }
-
-    chunkGroup.add(treeGroup);
 }
 
-const cloudGeom = new THREE.BoxGeometry(1, 1, 1);
+function buildModernTower(w, h, d, geoms) {
+    // Concrete Grid with recessed windows
+    // Use VARIETY of concrete based on random chance per building
+    // We can't access "per building" state here easily unless passed in, 
+    // but we can randomize use of geoms arrays.
 
-function createProceduralCloud(x, z, chunkGroup) {
-    // Massive clouds high up
-    const cloudGroup = new THREE.Group();
-    cloudGroup.userData = { isCloud: true, speed: 2 + Math.random() * 10 }; // [NEW] Tag for animation
-    const height = 450 + Math.random() * 150; // 450 to 600
-    cloudGroup.position.set(x, height, z);
+    const matChoice = Math.random();
+    let targetConcrete = geoms.concrete;
+    if (matChoice < 0.3) targetConcrete = geoms.concreteDark;
+    else if (matChoice > 0.7) targetConcrete = geoms.concreteLight;
 
-    // Randomize Type logic (Inline for simplicity)
-    let blobs = 8;
-    let scaleBase = 20;
-    let spread = 50;
+    // Core Concrete
+    targetConcrete.push(box(w, h, d, 0, h / 2, 0));
 
-    const r = Math.random();
-    if (r < 0.3) { // Small (Relative to huge)
-        blobs = 5; scaleBase = 15; spread = 40;
-    } else if (r < 0.7) { // Medium
-        blobs = 8; scaleBase = 25; spread = 60;
-    } else { // Massive
-        blobs = 12; scaleBase = 40; spread = 100;
+    // Windows (Grid)
+    const floors = Math.floor(h / 3.5);
+    const colsX = Math.floor(w / 3.0);
+    const colsZ = Math.floor(d / 3.0);
+    const floorH = h / floors;
+    const colW = w / colsX;
+    const colD = d / colsZ;
+
+    // Generate Windows on faces (Instead of one giant box)
+    // Front/Back
+    for (let i = 0; i < colsX; i++) {
+        for (let j = 1; j < floors; j++) {
+            const cx = -w / 2 + colW / 2 + i * colW;
+            const cy = j * floorH + floorH / 2;
+            // Front
+            geoms.glass.push(box(colW * 0.7, floorH * 0.7, 0.2, cx, cy, d / 2 + 0.05));
+            // Back
+            geoms.glass.push(box(colW * 0.7, floorH * 0.7, 0.2, cx, cy, -d / 2 - 0.05));
+        }
+    }
+    // Left/Right
+    for (let i = 0; i < colsZ; i++) {
+        for (let j = 1; j < floors; j++) {
+            const cz = -d / 2 + colD / 2 + i * colD;
+            const cy = j * floorH + floorH / 2;
+            // Left (x+)
+            geoms.glass.push(box(0.2, floorH * 0.7, colD * 0.7, w / 2 + 0.05, cy, cz));
+            // Right (x-)
+            geoms.glass.push(box(0.2, floorH * 0.7, colD * 0.7, -w / 2 - 0.05, cy, cz));
+        }
     }
 
-    for (let b = 0; b < blobs; b++) {
-        const mesh = new THREE.Mesh(cloudGeom, matCache.cloud);
-        mesh.position.set(
-            (Math.random() - 0.5) * spread,
-            (Math.random() - 0.5) * (spread * 0.4),
-            (Math.random() - 0.5) * (spread * 0.6)
-        );
-
-        const s = scaleBase * (0.8 + Math.random() * 0.5);
-        mesh.scale.set(s, s * 0.6, s * 0.8);
-        mesh.castShadow = true; // Clouds should cast shadows on the city!
-        // Note: Shadow camera might need to be huge to catch this.
-        cloudGroup.add(mesh);
+    // Horizontal Bands (Accent color?)
+    for (let i = 0; i <= floors; i++) {
+        const arr = Math.random() > 0.5 ? targetConcrete : geoms.darkMetal;
+        arr.push(box(w + 0.3, 0.4, d + 0.3, 0, i * floorH, 0));
     }
 
-    // Random Rotation
-    cloudGroup.rotation.y = Math.random() * Math.PI * 2;
-    chunkGroup.add(cloudGroup);
+    // Vertical Columns
+    for (let i = 0; i <= colsX; i++) {
+        targetConcrete.push(box(0.6, h, d - 0.5, -w / 2 + i * colW, h / 2, 0));
+    }
 }
 
-function addGate(x, z, width, chunkGroup, style = 0) {
-    const gateH = 2.5;
-    const gateW = 2.0;
-    const frameThick = 0.2;
+function buildBrickApartment(w, h, d, geoms) {
+    // Brick box
+    geoms.brick.push(box(w, h, d, 0, h / 2, 0));
 
-    // Determine Frame Material
-    let frameMat = matCache.frameBlack;
-    if (style === 2) frameMat = matCache.metalGold; // Art Deco
-    if (style === 1) frameMat = matCache.frameSilver; // Modern
+    // Windows (Inset frames)
+    const floorH = 3.2;
+    const floors = Math.floor(h / floorH);
+    const winW = 1.8;
+    const winH = 2.0;
 
-    // Frame (Slightly larger box)
-    const frame = new THREE.Mesh(buildingGeom, frameMat);
-    frame.position.set(x, gateH / 2, z + width / 2 + 0.04);
-    frame.scale.set(gateW + frameThick * 2, gateH + frameThick, 0.2);
-    chunkGroup.add(frame);
+    // iterate faces... simplified: Add "Frames" sticking out
+    const spacing = 3.0;
+    const cols = Math.floor(w / spacing);
 
-    // Gate Mesh (Inner)
-    const gate = new THREE.Mesh(buildingGeom, matCache.gate);
-    // Position at bottom center of +Z face
-    gate.position.set(x, gateH / 2, z + width / 2 + 0.06);
-    gate.scale.set(gateW, gateH, 0.2);
-    chunkGroup.add(gate);
-}
+    for (let f = 1; f < floors; f++) {
+        const y = f * floorH + 1.0;
 
-
-
-// REDEFINING addWindows to use InstancedMesh logic.
-// Instead of adding meshes, we push matrices to an array.
-function spawnWindowMatrices(x, y, z, w, h, d, matrices) {
-    const floorHeight = 3.5;
-    const windowSpacing = 2.5;
-
-    const floors = Math.floor(h / floorHeight);
-    const cols = Math.floor(w / windowSpacing);
-
-    const dummy = new THREE.Object3D();
-
-    for (let f = 0; f < floors; f++) {
-        // Start higher to avoid gate overlap (Ground floor lobby)
-        // Gate is 2.5m high. Window center at 5m means bottom at 4.1m. Safe.
-        const yPos = y - h / 2 + 5.0 + f * floorHeight;
-
-        if (yPos > y + h / 2) break; // Don't go above roof
-
-        if (Math.random() > 0.8) continue;
-
+        // Front/Back
         for (let c = 0; c < cols; c++) {
-            const offset = -w / 2 + 1 + c * windowSpacing;
+            const x = -w / 2 + 2 + c * spacing;
+            if (x > w / 2 - 1) continue;
 
-            const add = (px, py, pz, ry) => {
-                if (Math.random() < 0.7) {
-                    dummy.position.set(px, py, pz);
-                    dummy.rotation.set(0, ry, 0);
-                    dummy.scale.set(1, 1, 1);
-                    dummy.updateMatrix();
-                    matrices.push(dummy.matrix.clone());
-                }
-            };
-            add(x + offset, yPos, z + d / 2 + 0.05, 0);
-            add(x + offset, yPos, z - d / 2 - 0.05, Math.PI);
-            add(x + w / 2 + 0.05, yPos, z + offset, Math.PI / 2);
-            add(x - w / 2 - 0.05, yPos, z + offset, -Math.PI / 2);
+            // Frame
+            geoms.concrete.push(box(winW + 0.2, winH + 0.2, 0.2, x, y, d / 2));
+            geoms.concrete.push(box(winW + 0.2, winH + 0.2, 0.2, x, y, -d / 2));
+            // Glass
+            geoms.glass.push(box(winW, winH, 0.1, x, y, d / 2 + 0.1));
+            geoms.glass.push(box(winW, winH, 0.1, x, y, -d / 2 - 0.1));
         }
+    }
+
+    // Fire Escape (Side)
+    for (let f = 1; f < floors; f++) {
+        geoms.darkMetal.push(box(3.0, 0.2, 1.0, 0, f * floorH, d / 2 + 0.8)); // Platform
+        geoms.darkMetal.push(box(3.0, 0.1, 0.1, 0, f * floorH + 0.5, d / 2 + 1.3)); // Rail
+        // Ladder
+        geoms.darkMetal.push(box(0.6, floorH + 0.5, 0.1, 1.0, f * floorH + floorH / 2, d / 2 + 1.2));
     }
 }
 
-function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
-    // Weighted Style Selection: Giga Towers (5) are rare (1.2%)
-    let style = Math.floor(Math.random() * 5); // Default 0-4
-    if (Math.random() < 0.012) {
-        style = 5;
+function buildGlassTower(w, h, d, geoms) {
+    // Sleek continuous glass
+    geoms.glass.push(box(w, h, d, 0, h / 2, 0));
+
+    // Thin metal mullions
+    const cols = Math.floor(w / 2.0);
+    for (let i = 0; i <= cols; i++) {
+        geoms.metal.push(box(0.1, h, d + 0.05, -w / 2 + i * (w / cols), h / 2, 0));
     }
-    const height = 20 + Math.random() * 50;
-
-    // Collider
-    const box = new THREE.Box3();
-    box.min.set(x - width / 2, 0, z - width / 2);
-    box.max.set(x + width / 2, height, z + width / 2);
-    colliders.push(box);
-
-    // GATE
-    addGate(x, z, width, chunkGroup, style);
-
-    if (style === 0) {
-        // --- Classic Setback ---
-        const h1 = height * 0.45;
-        const b1 = new THREE.Mesh(buildingGeom, matCache.stoneA);
-        b1.position.set(x, h1 / 2, z);
-        b1.scale.set(width, h1, width);
-        b1.receiveShadow = true; b1.castShadow = true;
-        chunkGroup.add(b1);
-        spawnWindowMatrices(x, h1 / 2, z, width, h1, width, windowMatrices);
-
-        const h2 = height * 0.35;
-        const w2 = width * 0.7;
-        const b2 = new THREE.Mesh(buildingGeom, matCache.stoneA);
-        b2.position.set(x, h1 + h2 / 2, z);
-        b2.scale.set(w2, h2, w2);
-        b2.receiveShadow = true; b2.castShadow = true;
-        chunkGroup.add(b2);
-        spawnWindowMatrices(x, h1 + h2 / 2, z, w2, h2, w2, windowMatrices);
-
-        const h3 = height * 0.2;
-        const w3 = width * 0.4;
-        const b3 = new THREE.Mesh(buildingGeom, matCache.stoneA);
-        b3.position.set(x, h1 + h2 + h3 / 2, z);
-        b3.scale.set(w3, h3, w3);
-        b3.receiveShadow = true; b3.castShadow = true;
-        chunkGroup.add(b3);
-        spawnWindowMatrices(x, h1 + h2 + h3 / 2, z, w3, h3, w3, windowMatrices);
-
-        const ant = new THREE.Mesh(buildingGeom, matCache.metalGold);
-        ant.position.set(x, height + 4, z);
-        ant.scale.set(0.3, 8, 0.3);
-        chunkGroup.add(ant);
-
-    } else if (style === 1) {
-        // --- Modern Glass ---
-        // Changed: Lighter glass materials + Windows
-        const mat = Math.random() > 0.5 ? matCache.glassBlue : matCache.glassBlack;
-        const b = new THREE.Mesh(buildingGeom, mat);
-        b.position.set(x, height / 2, z);
-        b.scale.set(width, height, width);
-        b.castShadow = true; b.receiveShadow = true;
-        chunkGroup.add(b);
-
-        // Add sparse windows to look like lit offices behind glass
-        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
-
-        const roof = new THREE.Mesh(buildingGeom, matCache.sidewalk);
-        roof.position.set(x, height + 0.5, z);
-        roof.scale.set(width, 1, width);
-        chunkGroup.add(roof);
-
-    } else if (style === 2) {
-        // --- Art Deco ---
-        const mat = matCache.stoneB;
-        const b = new THREE.Mesh(buildingGeom, mat);
-        b.position.set(x, height / 2, z);
-        b.scale.set(width, height, width);
-        b.castShadow = true; b.receiveShadow = true;
-        chunkGroup.add(b);
-        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
-
-        const pw = 0.6;
-        const corners = [{ x: -1, z: -1 }, { x: 1, z: -1 }, { x: 1, z: 1 }, { x: -1, z: 1 }];
-        corners.forEach(c => {
-            const p = new THREE.Mesh(buildingGeom, matCache.metalGold);
-            p.position.set(x + c.x * width / 2, height / 2, z + c.z * width / 2);
-            p.scale.set(pw, height, pw);
-            chunkGroup.add(p);
-        });
-    } else if (style === 3) {
-        // --- Brick Apartment ---
-        const b = new THREE.Mesh(buildingGeom, matCache.brick);
-        b.position.set(x, height / 2, z);
-        b.scale.set(width, height, width);
-        b.castShadow = true; b.receiveShadow = true;
-        chunkGroup.add(b);
-        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
-
-        // Fire Escapes (Stylized stripes)
-        const s = new THREE.Mesh(buildingGeom, matCache.sidewalk);
-        s.scale.set(0.2, height * 0.8, 1.5);
-        chunkGroup.add(s);
-    } else if (style === 5) {
-        // --- Eco-Tower (Optimized Giga Tower) ---
-        // White concrete with terraced levels + Simple Vegetation
-
-        // OVERRIDE HEIGHT: GIGA TOWER
-        const superHeight = 300 + Math.random() * 80;
-
-        const levels = 8 + Math.floor(Math.random() * 4); // Slightly fewer levels for performance
-        let currY = 0;
-        let currW = width;
-        const levelH = superHeight / levels;
-
-        for (let i = 0; i < levels; i++) {
-            const b = new THREE.Mesh(buildingGeom, matCache.trunkWhite);
-            b.position.set(x, currY + levelH / 2, z);
-            b.scale.set(currW, levelH, currW);
-            b.castShadow = true; b.receiveShadow = true;
-            chunkGroup.add(b);
-
-            // Windows (Skip for top few levels to save rendering?)
-            if (i > 0 && i < levels - 1) {
-                spawnWindowMatrices(x, currY + levelH / 2, z, currW, levelH, currW, windowMatrices);
-            }
-
-            currY += levelH;
-        }
-
-        // Update Collider
-        if (colliders.length > 0) {
-            colliders[colliders.length - 1].max.y = superHeight;
-        }
-
-    } else {
-        // --- Futuristic Cyberpunk ---
-        const b = new THREE.Mesh(buildingGeom, matCache.cyberDark);
-        b.position.set(x, height / 2, z);
-        b.scale.set(width, height, width);
-        b.castShadow = true; b.receiveShadow = true;
-        chunkGroup.add(b);
-
-        // Neon Strips
-        const neonColor = Math.random() > 0.5 ? matCache.neonPink : matCache.neonCyan;
-        const n = new THREE.Mesh(buildingGeom, neonColor);
-        n.position.set(x, height * 0.8, z);
-        n.scale.set(width + 0.1, 0.5, width + 0.1); // Ring
-        chunkGroup.add(n);
-
-        const n2 = new THREE.Mesh(buildingGeom, neonColor);
-        n2.position.set(x, height * 0.4, z);
-        n2.scale.set(width + 0.1, 0.5, width + 0.1); // Ring
-        chunkGroup.add(n2);
-
-        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
+    // Floors
+    const floors = Math.floor(h / 4.0);
+    for (let i = 0; i < floors; i++) {
+        geoms.metal.push(box(w + 0.05, 0.2, d + 0.05, 0, i * 4.0, 0));
     }
 }
+
+function buildCyberTower(w, h, d, geoms) {
+    // Dark metal monolith
+    geoms.darkMetal.push(box(w, h, d, 0, h / 2, 0));
+
+    // Neon rings
+    geoms.neon.push(box(w + 0.1, 0.5, d + 0.1, 0, h * 0.8, 0));
+    geoms.neon.push(box(w + 0.1, 0.5, d + 0.1, 0, h * 0.5, 0));
+    geoms.neon.push(box(w + 0.1, 0.5, d + 0.1, 0, h * 0.2, 0));
+
+    // Antenna
+    geoms.metal.push(box(0.5, 10, 0.5, 0, h + 5, 0));
+    geoms.neon.push(box(0.2, 2, 0.2, 0, h + 10, 0));
+}
+
+function addRooftopDetails(w, h, d, geoms) {
+    // AC Unit
+    if (Math.random() > 0.3) {
+        geoms.metal.push(box(2, 1.5, 2, 2, h + 0.75, 2));
+    }
+    // Water Tower
+    if (Math.random() < 0.2) {
+        geoms.brick.push(box(2, 2.5, 2, -2, h + 1.25, -2)); // Simple box representation
+        geoms.metal.push(box(1.8, 0.5, 1.8, -2, h + 2.5, -2)); // Roof
+    }
+    // Parapet
+    geoms.concrete.push(box(w, 0.5, 0.2, 0, h + 0.25, d / 2 - 0.1));
+    geoms.concrete.push(box(w, 0.5, 0.2, 0, h + 0.25, -d / 2 + 0.1));
+    geoms.concrete.push(box(0.2, 0.5, d, w / 2 - 0.1, h + 0.25, 0));
+    geoms.concrete.push(box(0.2, 0.5, d, -w / 2 + 0.1, h + 0.25, 0));
+}
+
+// --- WORLD GENERATION ---
 
 export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
     const chunkGroup = new THREE.Group();
     const colliders = [];
 
-    // 1. Road (Ground) - Base layer
-    const road = new THREE.Mesh(roadGeom, matCache.road);
-    road.position.set(xPos, 0, zPos);
+    // 1. Road (Ground)
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matRoad);
     road.rotation.x = -Math.PI / 2;
-    road.scale.set(size, size, 1);
+    road.position.set(xPos, 0, zPos);
     road.receiveShadow = true;
     chunkGroup.add(road);
 
-    // 2. Markings (Cross at center)
-    const laneH = new THREE.Mesh(roadGeom, matCache.lane);
-    laneH.position.set(xPos, 0.02, zPos);
+    // Lane Markings
+    const laneH = new THREE.Mesh(new THREE.PlaneGeometry(size, 0.5), matLane);
     laneH.rotation.x = -Math.PI / 2;
-    laneH.scale.set(size, 0.5, 1);
+    laneH.position.set(xPos, 0.02, zPos);
     chunkGroup.add(laneH);
-
-    const laneV = new THREE.Mesh(roadGeom, matCache.lane);
-    laneV.position.set(xPos, 0.02, zPos);
+    const laneV = new THREE.Mesh(new THREE.PlaneGeometry(0.5, size), matLane);
     laneV.rotation.x = -Math.PI / 2;
-    laneV.scale.set(0.5, size, 1);
+    laneV.position.set(xPos, 0.02, zPos);
     chunkGroup.add(laneV);
 
-    // 3. Sidewalks & Buildings (4 Corners)
-    // Dynamic sizing based on roadWidth
+    // 2. Buildings Blocks (Corners)
     const cornerSize = (size - roadWidth) / 2;
     const offset = (roadWidth + cornerSize) / 2;
 
-    // Safety check
-    if (cornerSize < 1) return { mesh: chunkGroup, colliders: colliders };
-
     const corners = [
-        { x: -offset, z: -offset },
-        { x: offset, z: -offset },
-        { x: offset, z: offset },
-        { x: -offset, z: offset }
+        { x: -offset, z: -offset }, { x: offset, z: -offset },
+        { x: offset, z: offset }, { x: -offset, z: offset }
     ];
 
-    // Matrices for Instanced Windows
-    const windowMatrices = [];
-
-    // Supermarket Generator
-    function createSupermarket(x, z, width, chunkGroup, colliders) {
-        const height = 6; // Low rise
-        const mat = matCache.stoneA; // Concrete
-
-        // Main Box
-        const b = new THREE.Mesh(buildingGeom, mat);
-        b.position.set(x, height / 2, z);
-        b.scale.set(width, height, width);
-        b.castShadow = true; b.receiveShadow = true;
-        chunkGroup.add(b);
-
-        // Collider
-        const box = new THREE.Box3();
-        box.min.set(x - width / 2, 0, z - width / 2);
-        box.max.set(x + width / 2, height, z + width / 2);
-        colliders.push(box);
-
-        // Large Glass Front
-        const glass = new THREE.Mesh(buildingGeom, matCache.glassBlue);
-        glass.position.set(x, height * 0.4, z + width / 2 + 0.1); // Front face approx
-        glass.scale.set(width * 0.8, height * 0.6, 0.2);
-        chunkGroup.add(glass);
-
-        // Signage / Roof Detail
-        const sign = new THREE.Mesh(buildingGeom, matCache.neonCyan);
-        sign.position.set(x, height - 1, z + width / 2 + 0.2);
-        sign.scale.set(width * 0.5, 1, 0.2);
-        chunkGroup.add(sign);
-
-        // AC Units
-        const ac = new THREE.Mesh(buildingGeom, matCache.roof);
-        ac.position.set(x + 2, height + 0.5, z);
-        ac.scale.set(3, 1, 3);
-        chunkGroup.add(ac);
-    }
-
-    corners.forEach(corner => {
+    corners.forEach(Corner => {
         // Sidewalk
-        const sw = new THREE.Mesh(sidewalkGeom, matCache.sidewalk);
-        sw.position.set(xPos + corner.x, 0.1, zPos + corner.z);
-        sw.scale.set(cornerSize, 1, cornerSize);
+        const sw = new THREE.Mesh(new THREE.BoxGeometry(cornerSize, 0.2, cornerSize), matSidewalk);
+        sw.position.set(xPos + Corner.x, 0.1, zPos + Corner.z);
         sw.receiveShadow = true;
         chunkGroup.add(sw);
 
-        // Buildings
-        if (Math.random() > 0.2) { // 80% density
-            // WIDER SIDEWALK: increase margin from 4 to 12
-            const margin = 12;
-            const width = cornerSize - margin;
+        // Building
+        if (Math.random() > 0.1) {
+            const margin = 10;
+            const bw = cornerSize - margin;
 
-            if (width > 2) {
-                // Rare Supermarket
-                if (Math.random() < 0.05) {
-                    createSupermarket(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders);
-                } else {
-                    createNYCBuilding(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders, windowMatrices);
+            if (bw > 3) {
+                // Decide Style
+                const r = Math.random();
+                let style = 'modern';
+                let bh = 20 + Math.random() * 40;
+
+                if (r < 0.1) {
+                    // Giga Tower (Rare)
+                    style = 'future';
+                    bh = 300 + Math.random() * 200;
+                } else if (r < 0.25) {
+                    // Mega Tower (Uncommon)
+                    style = 'glass';
+                    bh = 120 + Math.random() * 100;
+                } else if (r < 0.45) {
+                    style = 'brick';
+                    bh = 15 + Math.random() * 25;
+                } else if (r < 0.6) {
+                    style = 'glass';
+                    bh = 40 + Math.random() * 60;
+                } else if (r < 0.7) {
+                    style = 'future';
+                    bh = 50 + Math.random() * 50;
                 }
-            }
 
-            // Trees in the margin
-            // Iterate along the perimeter of the building block, but in the sidewalk zone
-            // We can place 1-2 trees randomly per corner if there is space
-            const numTrees = Math.floor(Math.random() * 3); // 0 to 2 trees
-            for (let i = 0; i < numTrees; i++) {
-                const type = Math.floor(Math.random() * 10);
-                // Position relative to corner center
-                // The building occupies box [-width/2, width/2].
-                // The sidewalk occupies box [-cornerSize/2, cornerSize/2].
-                // We want to be in the ring between them.
+                const bMesh = createBuildingMesh(bw, bh, bw, style);
+                bMesh.position.set(xPos + Corner.x, 0, zPos + Corner.z);
+                chunkGroup.add(bMesh);
 
-                // Pick a side randomly: 0, 1, 2, 3
-                const side = Math.floor(Math.random() * 4);
-                // Distance from center: (width/2 + cornerSize/2) / 2 = midpoint of sidewalk
-                const range = (cornerSize / 2 + width / 2) / 2;
-
-                let tx = 0, tz = 0;
-                const spread = width / 2; // along the face
-
-                if (side === 0) { tx = range; tz = (Math.random() - 0.5) * spread * 2; }
-                if (side === 1) { tx = -range; tz = (Math.random() - 0.5) * spread * 2; }
-                if (side === 2) { tz = range; tx = (Math.random() - 0.5) * spread * 2; }
-                if (side === 3) { tz = -range; tx = (Math.random() - 0.5) * spread * 2; }
-
-                // Tree Pit (Dirt Patch)
-                const dirt = new THREE.Mesh(sidewalkGeom, matCache.dirt);
-                dirt.position.set(xPos + corner.x + tx, 0.11, zPos + corner.z + tz); // Slightly above sidewalk (0.1)
-                dirt.scale.set(1.5, 0.1, 1.5); // 1.5m square patch
-                dirt.receiveShadow = true;
-                chunkGroup.add(dirt);
-
-                createProceduralTree(type, xPos + corner.x + tx, zPos + corner.z + tz, chunkGroup);
+                // Collider
+                const box = new THREE.Box3();
+                box.min.set(xPos + Corner.x - bw / 2, 0, zPos + Corner.z - bw / 2);
+                box.max.set(xPos + Corner.x + bw / 2, bh, zPos + Corner.z + bw / 2);
+                colliders.push(box);
             }
         }
     });
 
-    // Create Instanced Mesh for windows if any
-    if (windowMatrices.length > 0) {
-        const instancedWindows = new THREE.InstancedMesh(windowGeom, matCache.window, windowMatrices.length);
+    // --- VEGETATION PASS ---
+    const vegGeoms = {
+        trunkBrown: [], trunkWhite: [],
+        leafGreen: [], leafDark: [], leafPink: [], leafOrange: [], leafYellow: [], dirt: [],
+        trunkGrey: [], trunkBlack: []
+    };
 
-        for (let i = 0; i < windowMatrices.length; i++) {
-            instancedWindows.setMatrixAt(i, windowMatrices[i]);
+    corners.forEach(Corner => {
+        const margin = 10;
+        const width = cornerSize - margin;
+        if (cornerSize > 6) {
+            // Pick random unique sides to prevent overlap
+            const sides = [0, 1, 2, 3];
+            // Shuffle
+            for (let i = sides.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [sides[i], sides[j]] = [sides[j], sides[i]];
+            }
+
+            const numTrees = Math.floor(Math.random() * 3); // 0-2 trees
+
+            for (let i = 0; i < numTrees; i++) {
+                const type = Math.floor(Math.random() * 6);
+                const r = (width / 2 + cornerSize / 2) / 2;
+                const side = sides[i]; // Unique side
+                // Reduced range (0.6) to avoid corners/streetlights
+                const offset = (Math.random() - 0.5) * width * 0.6;
+                let tx = xPos + Corner.x, tz = zPos + Corner.z;
+
+                if (side === 0) { tx += r; tz += offset; }
+                else if (side === 1) { tx -= r; tz += offset; }
+                else if (side === 2) { tz += r; tx += offset; }
+                else { tz -= r; tx += offset; }
+
+                addTreeToGeoms(type, tx, tz, vegGeoms);
+            }
         }
-        instancedWindows.instanceMatrix.needsUpdate = true;
-        chunkGroup.add(instancedWindows);
+    });
+
+    const addVeg = (arr, mat) => {
+        if (arr.length > 0) {
+            const merged = BufferGeometryUtils.mergeGeometries(arr);
+            const mesh = new THREE.Mesh(merged, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            chunkGroup.add(mesh);
+        }
+    };
+    addVeg(vegGeoms.trunkBrown, matTrunkBrown);
+    addVeg(vegGeoms.trunkWhite, matTrunkWhite);
+    addVeg(vegGeoms.leafGreen, matLeafGreen);
+    addVeg(vegGeoms.leafDark, matLeafDark);
+    addVeg(vegGeoms.leafPink, matLeafPink);
+    addVeg(vegGeoms.leafOrange, matLeafOrange);
+    addVeg(vegGeoms.leafYellow, matLeafYellow);
+    addVeg(vegGeoms.dirt, matDirt);
+    addVeg(vegGeoms.trunkGrey, matTrunkGrey);
+    addVeg(vegGeoms.trunkBlack, matTrunkBlack);
+
+    // 3. Streetlights (merged)
+    const poleGeoms = [];
+    const bulbGeoms = [];
+
+    // Corners of intersection
+    const lightOffset = roadWidth / 2 + 1;
+    const poles = [
+        { x: -lightOffset, z: -lightOffset, r: Math.PI / 4 },
+        { x: lightOffset, z: lightOffset, r: -3 * Math.PI / 4 },
+        { x: -lightOffset, z: lightOffset, r: 3 * Math.PI / 4 },
+        { x: lightOffset, z: -lightOffset, r: -Math.PI / 4 },
+    ];
+
+    poles.forEach(p => {
+        // Pole
+        poleGeoms.push(box(0.3, 8, 0.3, xPos + p.x, 4, zPos + p.z));
+        // Arm
+        // Rotate arm? box util doesn't support complex rotation easily, keep simple
+        poleGeoms.push(box(2, 0.2, 0.2, xPos + p.x + Math.sin(p.r), 7.5, zPos + p.z + Math.cos(p.r)));
+        // Bulb
+        bulbGeoms.push(box(0.5, 0.2, 0.5, xPos + p.x + Math.sin(p.r) * 1.5, 7.4, zPos + p.z + Math.cos(p.r) * 1.5));
+    });
+
+    if (poleGeoms.length > 0) {
+        const pMesh = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(poleGeoms), matDarkMetal);
+        pMesh.castShadow = true;
+        chunkGroup.add(pMesh);
+        const bMesh = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(bulbGeoms), matLight);
+        chunkGroup.add(bMesh);
     }
 
-    // CLOUDS: Generate 1-2 clouds above the city chunk
-    const numClouds = 1 + Math.floor(Math.random() * 2);
+    // Clouds
+    const numClouds = 2;
     for (let i = 0; i < numClouds; i++) {
-        createProceduralCloud(
-            xPos + (Math.random() - 0.5) * size,
-            zPos + (Math.random() - 0.5) * size,
-            chunkGroup
-        );
+        const c = createProceduralCloudMesh();
+        if (c) {
+            c.userData.isCloud = true;
+            c.position.set(xPos + (Math.random() - 0.5) * size, 600 + Math.random() * 200, zPos + (Math.random() - 0.5) * size);
+            chunkGroup.add(c);
+        }
     }
 
     return { mesh: chunkGroup, colliders: colliders };
 }
 
-
 export function createHighwayChunk(xPos, zPos, size, roadWidth, type = 'x') {
     const chunkGroup = new THREE.Group();
     const colliders = [];
 
-    // 1. Ground (Wasteland style but with road)
-    const ground = new THREE.Mesh(roadGeom, matCache.ground);
-    ground.position.set(xPos, -0.5, zPos);
+    // Ground
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matGround);
     ground.rotation.x = -Math.PI / 2;
-    ground.scale.set(size, size, 1);
+    ground.position.set(xPos, -0.5, zPos);
     ground.receiveShadow = true;
     chunkGroup.add(ground);
 
-    // 2. Road Generation based on Type
-    const buildXRoad = (type === 'x' || type === 'cross');
-    const buildZRoad = (type === 'z' || type === 'cross');
+    const buildX = (type === 'x' || type === 'cross');
+    const buildZ = (type === 'z' || type === 'cross');
 
-    if (buildXRoad) {
-        // Road Core X
-        const road = new THREE.Mesh(roadGeom, matCache.road);
+    if (buildX) {
+        const road = new THREE.Mesh(new THREE.PlaneGeometry(size, roadWidth), matRoad);
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(xPos, 0, zPos);
+        road.receiveShadow = true;
+        chunkGroup.add(road);
+
+        const lane = new THREE.Mesh(new THREE.PlaneGeometry(size, 0.5), matLane);
+        lane.rotation.x = -Math.PI / 2;
+        lane.position.set(xPos, 0.02, zPos);
+        chunkGroup.add(lane);
+    }
+    if (buildZ) {
+        const road = new THREE.Mesh(new THREE.PlaneGeometry(roadWidth, size), matRoad);
+        road.rotation.x = -Math.PI / 2;
         road.position.set(xPos, 0.01, zPos);
-        road.rotation.x = -Math.PI / 2;
-        road.scale.set(size, roadWidth, 1);
         road.receiveShadow = true;
         chunkGroup.add(road);
 
-        // Lane Markings X
-        const laneH = new THREE.Mesh(roadGeom, matCache.lane);
-        laneH.position.set(xPos, 0.02, zPos);
-        laneH.rotation.x = -Math.PI / 2;
-        laneH.scale.set(size, 0.5, 1);
-        chunkGroup.add(laneH);
-    }
-
-    if (buildZRoad) {
-        // Road Core Z
-        const road = new THREE.Mesh(roadGeom, matCache.road);
-        road.position.set(xPos, 0.015, zPos); // Slightly higher to avoid z-fight at crossing
-        road.rotation.x = -Math.PI / 2;
-        road.scale.set(roadWidth, size, 1);
-        road.receiveShadow = true;
-        chunkGroup.add(road);
-
-        // Lane Markings Z
-        const laneV = new THREE.Mesh(roadGeom, matCache.lane);
-        laneV.position.set(xPos, 0.025, zPos);
-        laneV.rotation.x = -Math.PI / 2;
-        laneV.scale.set(0.5, size, 1);
-        chunkGroup.add(laneV);
-    }
-
-    // No Vertical Road.
-    // No Buildings.
-    // Maybe some random rocks on the side?
-
-    const numRocks = Math.floor(Math.random() * 3);
-    for (let i = 0; i < numRocks; i++) {
-        const rSize = Math.random() * 3 + 1;
-        const rock = new THREE.Mesh(buildingGeom, matCache.sidewalk);
-
-        // Spawn rocks OUTSIDE the road width
-        // Road is from z-width/2 to z+width/2.
-        // Chunk is from z-size/2 to z+size/2.
-
-        const margin = roadWidth / 2 + 2;
-        const range = (size / 2) - margin;
-
-        // Random Z side (North or South of road)
-        const side = Math.random() > 0.5 ? 1 : -1;
-        const offsetZ = margin + Math.random() * range;
-
-        rock.position.set(
-            xPos + (Math.random() - 0.5) * size,
-            rSize / 2 - 0.5,
-            zPos + side * offsetZ
-        );
-        rock.scale.set(rSize, rSize, rSize);
-        rock.rotation.set(Math.random(), Math.random(), Math.random());
-        rock.castShadow = true;
-        chunkGroup.add(rock);
-
-        const box = new THREE.Box3().setFromObject(rock);
-        colliders.push(box);
-    }
-
-    // CLOUDS: Generate 1-2 clouds above the highway chunk
-    const numClouds = 1 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < numClouds; i++) {
-        createProceduralCloud(
-            xPos + (Math.random() - 0.5) * size,
-            zPos + (Math.random() - 0.5) * size,
-            chunkGroup
-        );
+        const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.5, size), matLane);
+        lane.rotation.x = -Math.PI / 2;
+        lane.position.set(xPos, 0.02, zPos);
+        chunkGroup.add(lane);
     }
 
     return { mesh: chunkGroup, colliders: colliders };
@@ -745,49 +584,15 @@ export function createHighwayChunk(xPos, zPos, size, roadWidth, type = 'x') {
 export function createWastelandChunk(xPos, zPos, size) {
     const chunkGroup = new THREE.Group();
     const colliders = [];
-
-    // Uneven Ground
-    const ground = new THREE.Mesh(roadGeom, matCache.ground);
-    ground.position.set(xPos, -0.5, zPos); // Slightly lower
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matGround);
     ground.rotation.x = -Math.PI / 2;
-    ground.scale.set(size, size, 1);
+    ground.position.set(xPos, -0.5, zPos);
     ground.receiveShadow = true;
     chunkGroup.add(ground);
-
-    // Rocks / Debris
-    const numRocks = Math.floor(Math.random() * 3);
-    for (let i = 0; i < numRocks; i++) {
-        const rSize = Math.random() * 3 + 1;
-        const rock = new THREE.Mesh(buildingGeom, matCache.sidewalk); // Use gray material
-        rock.position.set(
-            xPos + (Math.random() - 0.5) * size * 0.8,
-            rSize / 2 - 0.5,
-            zPos + (Math.random() - 0.5) * size * 0.8
-        );
-        rock.scale.set(rSize, rSize, rSize);
-        rock.rotation.set(Math.random(), Math.random(), Math.random());
-        rock.castShadow = true;
-        chunkGroup.add(rock);
-
-        const box = new THREE.Box3().setFromObject(rock);
-        colliders.push(box);
-    }
-
-    // CLOUDS: Generate 1-2 clouds above the wasteland chunk
-    const numClouds = 1 + Math.floor(Math.random() * 2);
-    for (let i = 0; i < numClouds; i++) {
-        createProceduralCloud(
-            xPos + (Math.random() - 0.5) * size,
-            zPos + (Math.random() - 0.5) * size,
-            chunkGroup
-        );
-    }
-
     return { mesh: chunkGroup, colliders: colliders };
 }
 
 export async function createWorld(scene) {
-    // Lighting setup only
     const ambientLight = new THREE.AmbientLight(0x222233, 0.3);
     scene.add(ambientLight);
 
@@ -798,21 +603,27 @@ export async function createWorld(scene) {
     directionalLight.shadow.mapSize.height = 2048;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -250;
-    directionalLight.shadow.camera.right = 250;
-    directionalLight.shadow.camera.top = 250;
-    directionalLight.shadow.camera.bottom = -250;
+    directionalLight.shadow.camera.left = -200;
+    directionalLight.shadow.camera.right = 200;
+    directionalLight.shadow.camera.top = 200;
+    directionalLight.shadow.camera.bottom = -200;
     scene.add(directionalLight);
 
-    // We return empty world data, main.js will use ChunkManager
     return {
-        citySize: 1000, // Virtual size
-        blockSize: 100, // 100 + 24 = 124 total chunk size
-        roadWidth: 24,
-        colliders: [], // No static colliders upfront
-        cubes: [], // Empty for now, NMS world doesn't have static collectibles yet
-        materials: matCache,
+        roadWidth: 14,
+        blockSize: 40,
+        citySize: 1000,
         directionalLight,
-        ambientLight
+        ambientLight,
+        materials: {
+            road: matRoad,
+            sidewalk: matSidewalk,
+            building: matConcrete,
+            glassModern: matGlassModern,
+            glassOffice: matGlassOffice,
+            metal: matMetal,
+            darkMetal: matDarkMetal,
+            cloud: matCloud
+        }
     };
 }
