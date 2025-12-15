@@ -50,8 +50,171 @@ const matCache = {
     marketSign: new THREE.MeshBasicMaterial({ map: createSignTexture('MARKET', '#ffffff', '#0088aa') }),
     gate: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.4, metalness: 0.9 }),
     frameSilver: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.3, metalness: 0.9 }),
-    frameBlack: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8 })
+    frameBlack: new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.8 }),
+    // Tree Materials
+    trunkBrown: new THREE.MeshStandardMaterial({ color: 0x553311, roughness: 0.9 }),
+    trunkWhite: new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8 }),
+    trunkGrey: new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 1.0 }),
+    trunkBlack: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }),
+    leafGreen: new THREE.MeshStandardMaterial({ color: 0x4da737, roughness: 0.8 }),
+    leafDarkGreen: new THREE.MeshStandardMaterial({ color: 0x225522, roughness: 0.9 }),
+    leafLightGreen: new THREE.MeshStandardMaterial({ color: 0x88cc44, roughness: 0.8 }),
+    leafPink: new THREE.MeshStandardMaterial({ color: 0xffaacc, roughness: 0.8 }), // Softer pink
+    leafOrange: new THREE.MeshStandardMaterial({ color: 0xdd7722, roughness: 0.8 }), // Muted orange
+    leafRed: new THREE.MeshStandardMaterial({ color: 0xaa3333, roughness: 0.8 }), // Maple Red
+    leafYellow: new THREE.MeshStandardMaterial({ color: 0xddcc22, roughness: 0.8 }), // Birch Yellow
+    dirt: new THREE.MeshStandardMaterial({ color: 0x5b4033, roughness: 1.0 })
 };
+
+const treeGeom = {
+    trunk: new THREE.CylinderGeometry(0.2, 0.3, 1, 7),
+    branch: new THREE.CylinderGeometry(0.1, 0.15, 1, 5),
+    sphere: new THREE.IcosahedronGeometry(1, 1),
+    cone: new THREE.ConeGeometry(1, 1, 7),
+    box: new THREE.BoxGeometry(1, 1, 1)
+};
+
+// Adjust pivot for trunk to be at bottom
+treeGeom.trunk.translate(0, 0.5, 0);
+treeGeom.branch.translate(0, 0.5, 0);
+treeGeom.cone.translate(0, 0.5, 0);
+
+function createProceduralTree(type, x, z, chunkGroup) {
+    const treeGroup = new THREE.Group();
+    treeGroup.position.set(x, 0, z);
+
+    let trunkMat = matCache.trunkBrown;
+    let leafMat = matCache.leafGreen;
+    let trunkH = 3;
+    let trunkR = 0.3;
+    let leafH = 0; // if 0, sphere
+    let leafR = 1.5;
+
+    // Custom Geometry Config
+    if (type === 0) { // Oak
+        trunkMat = matCache.trunkBrown;
+        leafMat = matCache.leafGreen;
+        trunkH = 2.5;
+        leafR = 1.8;
+    } else if (type === 1) { // Pine
+        trunkMat = matCache.trunkBrown;
+        leafMat = matCache.leafDarkGreen;
+        trunkH = 2;
+    } else if (type === 2) { // Birch
+        trunkMat = matCache.trunkWhite;
+        leafMat = matCache.leafYellow; // Autumn/Yellowish
+        trunkH = 4;
+        trunkR = 0.2;
+        leafR = 1.6;
+    } else if (type === 3) { // Cherry
+        trunkMat = matCache.trunkBrown;
+        leafMat = matCache.leafPink; // Realistic Sakura
+        trunkH = 3;
+        leafR = 1.6;
+    } else if (type === 4) { // Autumn
+        trunkMat = matCache.trunkGrey;
+        leafMat = matCache.leafOrange;
+        trunkH = 3;
+        leafR = 1.7;
+    } else if (type === 5) { // Palm
+        trunkMat = matCache.trunkBrown;
+        leafMat = matCache.leafGreen;
+        trunkH = 5;
+        trunkR = 0.2;
+    } else if (type === 6) { // Shrub
+        trunkMat = matCache.trunkBrown;
+        trunkH = 0.5;
+        leafR = 1.0;
+    } else if (type === 7) { // Maple (Was Dead)
+        trunkMat = matCache.trunkGrey;
+        leafMat = matCache.leafRed;
+        trunkH = 3;
+        leafR = 1.8;
+    } else if (type === 8) { // Poplar (Was Cyber)
+        trunkMat = matCache.trunkBlack; // Dark Bark
+        leafMat = matCache.leafDarkGreen;
+        trunkH = 4.5;
+        trunkR = 0.25;
+        // Tall thin
+    } else if (type === 9) { // Willow
+        trunkMat = matCache.trunkBrown;
+        leafMat = matCache.leafLightGreen; // Natural Light Green
+        trunkH = 2.5;
+        leafR = 2.0;
+    }
+
+    // Build Mesh
+    const trunk = new THREE.Mesh(treeGeom.trunk, trunkMat);
+    trunk.scale.set(trunkR, trunkH, trunkR);
+    trunk.castShadow = true;
+    treeGroup.add(trunk);
+
+    if (type === 1) { // Pine Cone
+        // ... (Same logic, simplified geometry call checks)
+        const l1 = new THREE.Mesh(treeGeom.cone, leafMat);
+        l1.position.y = trunkH;
+        l1.scale.set(2, 1.5, 2);
+        treeGroup.add(l1);
+        const l2 = new THREE.Mesh(treeGeom.cone, leafMat);
+        l2.position.y = trunkH + 1.2;
+        l2.scale.set(1.5, 1.5, 1.5);
+        treeGroup.add(l2);
+        const l3 = new THREE.Mesh(treeGeom.cone, leafMat);
+        l3.position.y = trunkH + 2.2;
+        l3.scale.set(0.8, 1.5, 0.8);
+        treeGroup.add(l3);
+
+    } else if (type === 5) { // Palm
+        for (let i = 0; i < 6; i++) {
+            const f = new THREE.Mesh(treeGeom.branch, leafMat);
+            f.position.y = trunkH;
+            f.scale.set(0.5, 3.0, 0.5);
+            f.rotation.y = (Math.PI / 3) * i;
+            f.rotation.z = 1.0; // Droop out
+            treeGroup.add(f);
+        }
+    } else if (type === 8) { // Poplar (Tall Column)
+        const l = new THREE.Mesh(treeGeom.cone, leafMat);
+        l.position.y = trunkH - 1;
+        l.scale.set(1.2, 5, 1.2);
+        treeGroup.add(l);
+    } else if (type === 9) { // Willow
+        // Drooping tendrils
+        const count = 12;
+        for (let i = 0; i < count; i++) {
+            const r = 2.0;
+            const ang = (i / count) * Math.PI * 2;
+            const lx = Math.sin(ang) * r;
+            const lz = Math.cos(ang) * r;
+            // Branch out
+            // Droop down
+            const tendril = new THREE.Mesh(treeGeom.branch, matCache.leafTeal); // Teal for style
+            tendril.position.set(lx, h + 1, lz);
+            tendril.scale.set(0.2, 3.0, 0.2);
+            tendril.rotation.x = Math.PI; // Point downish
+            treeGroup.add(tendril);
+        }
+        const cap = new THREE.Mesh(treeGeom.sphere, matCache.leafLightGreen);
+        cap.position.set(0, h + 1, 0);
+        cap.scale.set(2.5, 1.5, 2.5);
+        cap.castShadow = true; cap.receiveShadow = true;
+        treeGroup.add(cap);
+    } else {
+        // --- Cyber / Default (Fallback) ---
+        const t = new THREE.Mesh(treeGeom.trunk, matCache.trunkBlack);
+        t.scale.set(1, 3, 1);
+        t.castShadow = true; t.receiveShadow = true;
+        treeGroup.add(t);
+
+        const l = new THREE.Mesh(treeGeom.box, matCache.leafNeon);
+        l.position.y = 3;
+        l.scale.set(1.5, 1.5, 1.5);
+        l.castShadow = true; l.receiveShadow = true;
+        treeGroup.add(l);
+    }
+
+    chunkGroup.add(treeGroup);
+}
 
 function addGate(x, z, width, chunkGroup, style = 0) {
     const gateH = 2.5;
@@ -353,7 +516,10 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
 
         // Buildings
         if (Math.random() > 0.2) { // 80% density
-            const width = cornerSize - 4; // Margin
+            // WIDER SIDEWALK: increase margin from 4 to 12
+            const margin = 12;
+            const width = cornerSize - margin;
+
             if (width > 2) {
                 // Rare Supermarket
                 if (Math.random() < 0.05) {
@@ -361,6 +527,40 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
                 } else {
                     createNYCBuilding(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders, windowMatrices);
                 }
+            }
+
+            // Trees in the margin
+            // Iterate along the perimeter of the building block, but in the sidewalk zone
+            // We can place 1-2 trees randomly per corner if there is space
+            const numTrees = Math.floor(Math.random() * 3); // 0 to 2 trees
+            for (let i = 0; i < numTrees; i++) {
+                const type = Math.floor(Math.random() * 10);
+                // Position relative to corner center
+                // The building occupies box [-width/2, width/2].
+                // The sidewalk occupies box [-cornerSize/2, cornerSize/2].
+                // We want to be in the ring between them.
+
+                // Pick a side randomly: 0, 1, 2, 3
+                const side = Math.floor(Math.random() * 4);
+                // Distance from center: (width/2 + cornerSize/2) / 2 = midpoint of sidewalk
+                const range = (cornerSize / 2 + width / 2) / 2;
+
+                let tx = 0, tz = 0;
+                const spread = width / 2; // along the face
+
+                if (side === 0) { tx = range; tz = (Math.random() - 0.5) * spread * 2; }
+                if (side === 1) { tx = -range; tz = (Math.random() - 0.5) * spread * 2; }
+                if (side === 2) { tz = range; tx = (Math.random() - 0.5) * spread * 2; }
+                if (side === 3) { tz = -range; tx = (Math.random() - 0.5) * spread * 2; }
+
+                // Tree Pit (Dirt Patch)
+                const dirt = new THREE.Mesh(sidewalkGeom, matCache.dirt);
+                dirt.position.set(xPos + corner.x + tx, 0.11, zPos + corner.z + tz); // Slightly above sidewalk (0.1)
+                dirt.scale.set(1.5, 0.1, 1.5); // 1.5m square patch
+                dirt.receiveShadow = true;
+                chunkGroup.add(dirt);
+
+                createProceduralTree(type, xPos + corner.x + tx, zPos + corner.z + tz, chunkGroup);
             }
         }
     });
