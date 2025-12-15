@@ -134,7 +134,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.14.2 - INFINITE SKY';
+        verDiv.innerHTML = 'v5.14.5 - PURE SUN';
         document.body.appendChild(verDiv);
 
         animate(() => {

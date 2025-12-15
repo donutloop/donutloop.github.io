@@ -58,8 +58,11 @@ export class WeatherSystem {
 
     initSky() {
         // Sun
-        const sunGeom = new THREE.SphereGeometry(10, 32, 32);
-        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Bright Yellow
+        const sunGeom = new THREE.SphereGeometry(80, 32, 32); // Massive Sun/Moon
+        const sunMat = new THREE.MeshBasicMaterial({
+            color: 0xffdd44, // Warmer Yellow (less neon)
+            fog: false // IMPORTANT: Ignore fog so it stays bright at distance
+        });
         this.sun = new THREE.Mesh(sunGeom, sunMat);
         // Align with initial lighting
         this.sun.position.set(50, 100, 50);
@@ -316,7 +319,7 @@ export class WeatherSystem {
             );
 
             if (sunRelY < 0) {
-                this.sun.material.color.setHex(0xaaaaaa);
+                this.sun.material.color.setHex(0xffffff); // Bright White Moon
                 // Moon Opposite
                 this.sun.position.set(
                     playerPos.x - sunRelX,
@@ -324,7 +327,7 @@ export class WeatherSystem {
                     playerPos.z
                 );
             } else {
-                this.sun.material.color.setHex(0xffff00);
+                this.sun.material.color.setHex(0xffdd44); // Warmer Yellow Sun (matches init)
             }
         }
 
