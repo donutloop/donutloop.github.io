@@ -296,13 +296,32 @@ export class Player {
             this.colliders.push(newBox);
         }
 
+        // Calculate dynamic offsets based on vehicle size
+        // We temporarily reset rotation to get local axis-aligned bounding box
+        const prevRot = this.currentCar.mesh.rotation.clone();
+        this.currentCar.mesh.rotation.set(0, 0, 0);
+        this.currentCar.mesh.updateMatrixWorld(); // Force update for accurate box
+
+        const carBox = new THREE.Box3().setFromObject(this.currentCar.mesh);
+        const size = new THREE.Vector3();
+        carBox.getSize(size);
+
+        // Restore rotation
+        this.currentCar.mesh.rotation.copy(prevRot);
+        this.currentCar.mesh.updateMatrixWorld();
+
+        // Add safety margin
+        const margin = 1.0;
+        const spacingX = size.x / 2 + margin;
+        const spacingZ = size.z / 2 + margin + 1; // Extra space for front/back
+
         // Check multiple exit points to find a safe spot
         // Left, Right, Back, Front
         const checkOffsets = [
-            new THREE.Vector3(3, 0, 0),
-            new THREE.Vector3(-3, 0, 0),
-            new THREE.Vector3(0, 0, -4),
-            new THREE.Vector3(0, 0, 4)
+            new THREE.Vector3(spacingX, 0, 0),
+            new THREE.Vector3(-spacingX, 0, 0),
+            new THREE.Vector3(0, 0, -spacingZ),
+            new THREE.Vector3(0, 0, spacingZ)
         ];
 
         let safePos = null;
