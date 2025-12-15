@@ -8,6 +8,7 @@ import { PedestrianSystem } from './pedestrians.js?v=100';
 import { ParkingSystem } from './parking.js?v=102';
 import { AirplaneSystem } from './airplanes.js';
 import { EffectSystem } from './effects.js';
+import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
 import { ChunkManager } from './chunk_manager.js?v=2';
 
 let player;
@@ -21,7 +22,8 @@ let pedestrianSystem;
 let parkingSystem;
 let airplaneSystem;
 let effectSystem;
-let chunkManager; // [NEW]
+let trafficLightSystem; // [NEW]
+let chunkManager;
 
 function initScore() {
     scoreElement = document.createElement('div');
@@ -59,7 +61,8 @@ async function init() {
         // Effect System
         effectSystem = new EffectSystem(scene);
 
-        // Initialize Systems (Chunk-Aware, so they don't auto-spawn globally)
+        // Initialize Systems
+        trafficLightSystem = new TrafficLightSystem(scene, worldData.roadWidth, worldData.blockSize);
         trafficSystem = new TrafficSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
         parkingSystem = new ParkingSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
         pedestrianSystem = new PedestrianSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
@@ -75,7 +78,8 @@ async function init() {
             worldData,
             trafficSystem,
             parkingSystem,
-            pedestrianSystem
+            pedestrianSystem,
+            trafficLightSystem
         );
         chunkManager.update(); // Initial load
 
@@ -86,8 +90,9 @@ async function init() {
         player.trafficSystem = trafficSystem;
         player.parkingSystem = parkingSystem;
 
-        // Initialize Traffic Dependencies
-        trafficSystem.setDependencies(player, parkingSystem);
+        // Dependency Injection
+        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem);
+        pedestrianSystem.setDependencies(trafficLightSystem, parkingSystem);
 
         // Weather
         weatherSystem = new WeatherSystem(scene, worldData.directionalLight, worldData.ambientLight, worldData.materials);
@@ -127,59 +132,37 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v4.4 - WIDE STREETS';
+        verDiv.innerHTML = 'v5.0 - SMART CITY';
         document.body.appendChild(verDiv);
 
         animate(() => {
             const time = performance.now();
             const delta = (time - prevTime) / 1000;
+            prevTime = time;
 
-            if (player) player.update(delta);
-            if (trafficSystem) trafficSystem.update(delta);
-            if (weatherSystem) weatherSystem.update(delta);
-            if (pedestrianSystem) pedestrianSystem.update(delta);
-            if (airplaneSystem) airplaneSystem.update(delta);
-
-            if (chunkManager) {
-                chunkManager.update();
-                // Update player colliders continuously as chunks load/unload
-                if (player) {
-                    player.colliders = chunkManager.getColliders();
-                }
-            }
-
-            // Update Effects
-            if (player && player.effectSystem) player.effectSystem.update(delta); // Update effects
-
-            // Simple collision detection
-            if (player && cubes.length > 0) {
-                const playerPos = player.camera.position;
-                for (let i = cubes.length - 1; i >= 0; i--) {
-                    const cube = cubes[i];
-                    const distance = playerPos.distanceTo(cube.position);
-
-                    // Rotate cube for visual effect
-                    cube.rotation.x += delta;
-                    cube.rotation.y += delta;
-
-                    if (distance < 2) {
-                        // Collect
-                        scene.remove(cube);
-                        cubes.splice(i, 1);
-                        score += 10;
-                        scoreElement.innerHTML = `Score: ${score}`;
+            try {
+                if (chunkManager) {
+                    chunkManager.update();
+                    // Update player colliders continuously as chunks load/unload
+                    if (player) {
+                        player.colliders = chunkManager.getColliders();
                     }
                 }
-            }
 
-            if (cubes.length === 0 && score > 0) {
-                // Only show win if we actually played and cleared cubes
-                // For infinite world, we might never "win"
-                // scoreElement.innerHTML = `You Win! Final Score: ${score}`;
-                // scoreElement.style.color = '#00ff00';
-            }
+                if (player) player.update(delta);
+                if (trafficSystem) trafficSystem.update(delta);
+                if (trafficLightSystem) trafficLightSystem.update(delta);
+                if (weatherSystem) weatherSystem.update(delta);
+                if (pedestrianSystem) pedestrianSystem.update(delta);
+                if (airplaneSystem) airplaneSystem.update(delta);
 
-            prevTime = time;
+                // Update Effects
+                if (effectSystem) effectSystem.update(delta);
+
+                renderer.render(scene, camera);
+            } catch (err) {
+                console.error("Game Loop Error:", err);
+            }
         });
     } catch (err) {
         console.error(err);

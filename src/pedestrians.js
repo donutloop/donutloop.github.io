@@ -3,13 +3,16 @@ import * as THREE from 'three';
 export class PedestrianSystem {
     constructor(scene, citySize, blockSize, roadWidth) {
         this.scene = scene;
-        this.citySize = citySize; // e.g. 10
-        this.blockSize = blockSize; // e.g. 20
-        this.roadWidth = roadWidth; // e.g. 10
-        this.chunkPeds = new Map(); // "cx,cz" -> Array of peds
-        this.speed = 2;
+        this.citySize = citySize;
+        this.blockSize = blockSize;
+        this.roadWidth = roadWidth;
+        this.chunkPeds = new Map();
 
-        // Shared Geometries/Materials/Cache
+        // Settings
+        this.maxSpeed = 2.0;
+        this.maxForce = 5.0; // Steering force limit
+
+        // Shared Geometries/Materials
         this.bodyGeom = new THREE.BoxGeometry(0.5, 0.8, 0.3);
         this.headGeom = new THREE.BoxGeometry(0.3, 0.3, 0.3);
         this.legGeom = new THREE.BoxGeometry(0.2, 0.8, 0.2);
@@ -17,11 +20,13 @@ export class PedestrianSystem {
         this.legMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     }
 
+    setDependencies(trafficLightSystem, parkingSystem) {
+        this.trafficLightSystem = trafficLightSystem;
+    }
+
     loadChunk(cx, cz) {
-        // Only spawn in city chunks?
-        // Let's assume passed coords are valid places to spawn.
         const pedsList = [];
-        const pedsPerChunk = 3;
+        const pedsPerChunk = 4; // Slightly more for busy streets
 
         const chunkSize = this.blockSize + this.roadWidth;
         const xOffset = cx * chunkSize;
@@ -29,30 +34,24 @@ export class PedestrianSystem {
 
         for (let i = 0; i < pedsPerChunk; i++) {
             const group = this.createPedMesh();
-
-            // Position within chunk (Sidewalks are roughly around center of block)
-            // Block is centered at xOffset, zOffset in our simplified chunk logic?
-            // Actually createCityChunk uses xOffset, zOffset as center of the 34x34 tile.
-            // Sidewalk is around the buildings.
-
             const state = this.spawnPedInChunk(group, xOffset, zOffset, this.blockSize);
 
             this.scene.add(group);
+
             pedsList.push({
                 mesh: group,
+                velocity: new THREE.Vector3(0, 0, 0),
+                acceleration: new THREE.Vector3(0, 0, 0),
+                state: 'WALKING', // WALKING, WAITING, CROSSING
+                target: state.target, // Keep walking towards a goal
                 chunkX: xOffset,
                 chunkZ: zOffset,
-                direction: state.direction,
-                bounds: {
-                    minX: state.minX, maxX: state.maxX, minZ: state.minZ, maxZ: state.maxZ,
-                    buildingCenterX: state.buildingCenterX,
-                    buildingCenterZ: state.buildingCenterZ,
-                    buildingHalfWidth: state.buildingHalfWidth
-                },
+                chunkSize: chunkSize,
+                bounds: state.bounds,
                 legAnimTimer: Math.random() * 10,
-                leftLeg: group.children[2], // Hacky index access, but fast
+                leftLeg: group.children[2],
                 rightLeg: group.children[3],
-                blockSize: this.blockSize
+                waitTimer: 0
             });
         }
         this.chunkPeds.set(`${cx},${cz}`, pedsList);
@@ -71,9 +70,7 @@ export class PedestrianSystem {
 
     createPedMesh() {
         const group = new THREE.Group();
-
-        // Color variation
-        const color = new THREE.Color().setHSL(Math.random(), 0.7, 0.5);
+        const color = new THREE.Color().setHSL(Math.random(), 0.6, 0.4);
         const mat = new THREE.MeshStandardMaterial({ color: color });
 
         const body = new THREE.Mesh(this.bodyGeom, mat);
@@ -98,148 +95,257 @@ export class PedestrianSystem {
     }
 
     spawnPedInChunk(group, chunkX, chunkZ, blockSize) {
-        // Pick one of the 4 corners
-        const cornerIdx = Math.floor(Math.random() * 4);
-        const signs = [
-            { x: -1, z: -1 }, // Top-Left
-            { x: 1, z: -1 },  // Top-Right
-            { x: 1, z: 1 },   // Bottom-Right
-            { x: -1, z: 1 }   // Bottom-Left
-        ];
-        const sign = signs[cornerIdx];
-
-        // Dynamic Geometry Calculations
+        // Spawn on random sidewalk quadrant
         const roadHalf = this.roadWidth / 2;
         const cornerSize = blockSize / 2;
 
-        // Center of the sidewalk area (per quadrant)
+        // Pick Quadrant
+        const qs = [
+            { x: -1, z: -1 }, { x: 1, z: -1 }, { x: 1, z: 1 }, { x: -1, z: 1 }
+        ];
+        const q = qs[Math.floor(Math.random() * 4)];
+
+        // Random pos in sidewalk
+        // Sidewalk is from roadHalf to roadHalf+cornerSize
+        const sx = roadHalf + Math.random() * cornerSize;
+        const sz = roadHalf + Math.random() * cornerSize;
+
+        const lx = sx * q.x;
+        const lz = sz * q.z;
+
+        group.position.set(chunkX + lx, 0, chunkZ + lz);
+
+        // Pick initial target: Another corner of the same block or cross street?
+        // Let's walk along an axis.
+        const axis = Math.random() > 0.5 ? 'x' : 'z';
+        const dir = Math.random() > 0.5 ? 1 : -1;
+
+        // Target is far away in that direction
+        const target = new THREE.Vector3(dir * 100, 0, 0);
+        if (axis === 'z') target.set(0, 0, dir * 100);
+
+        // Add current pos to relative target
+        target.add(group.position);
+
+        // Initial bounds for building avoidance
         const sidewalkCenter = roadHalf + cornerSize / 2;
+        const buildingCenterX = sidewalkCenter * q.x;
+        const buildingCenterZ = sidewalkCenter * q.z;
+        const buildingHalfWidth = (cornerSize - 4) / 2 + 0.5;
 
-        // Bounds for this quadrant (Positive)
-        const minBound = roadHalf; // Start of sidewalk (Edge of road)
-        const maxBound = roadHalf + cornerSize; // End of sidewalk
-
-        // Building Info (Matches world.js logic)
-        // Building width = cornerSize - 4.
-        // Building Center = sidewalkCenter.
-        const buildingWidth = cornerSize - 4;
-        const buildingHalfWidth = (buildingWidth / 2) + 0.2; // +0.2 margin
-
-        const buildingCenterX = sidewalkCenter * sign.x;
-        const buildingCenterZ = sidewalkCenter * sign.z;
-
-        // Spawn logic: Try to find a spot OUTSIDE the building box
-        let localX, localZ;
-        let safe = false;
-
-        for (let i = 0; i < 15; i++) {
-            // Random within bounds
-            const rawX = minBound + Math.random() * cornerSize;
-            const rawZ = minBound + Math.random() * cornerSize;
-
-            const lx = rawX * sign.x;
-            const lz = rawZ * sign.z;
-
-            // Check against building hole
-            const distBx = Math.abs(lx - buildingCenterX);
-            const distBz = Math.abs(lz - buildingCenterZ);
-
-            // If NOT inside building
-            if (!(distBx < buildingHalfWidth && distBz < buildingHalfWidth)) {
-                localX = lx;
-                localZ = lz;
-                safe = true;
-                break;
-            }
-        }
-
-        if (!safe) {
-            // Fallback: spawn on the outer rim
-            localX = (maxBound - 1.0) * sign.x;
-            localZ = (maxBound - 1.0) * sign.z;
-        }
-
-        group.position.set(chunkX + localX, 0, chunkZ + localZ);
-
-        // Random direction
-        const angle = Math.random() * Math.PI * 2;
-        const direction = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
-
-        // Store bounds for this ped
         return {
-            direction,
-            minX: sign.x > 0 ? minBound : -maxBound,
-            maxX: sign.x > 0 ? maxBound : -minBound,
-            minZ: sign.z > 0 ? minBound : -maxBound,
-            maxZ: sign.z > 0 ? maxBound : -minBound,
-            // Building collision data
-            buildingCenterX,
-            buildingCenterZ,
-            buildingHalfWidth
+            target,
+            bounds: { buildingCenterX, buildingCenterZ, buildingHalfWidth }
         };
     }
 
     update(delta) {
-        // Iterate all active chunks
+        if (delta > 0.1) delta = 0.1; // Cap delta for physics stability
+
         for (const peds of this.chunkPeds.values()) {
             peds.forEach(ped => {
-                // Move
-                ped.mesh.position.add(ped.direction.clone().multiplyScalar(this.speed * delta));
+                const force = new THREE.Vector3(0, 0, 0);
 
-                // Check bounds (local coords)
-                const localX = ped.mesh.position.x - ped.chunkX;
-                const localZ = ped.mesh.position.z - ped.chunkZ;
-                let turned = false;
+                // 1. Behavior: Seek Target
+                // If crossing, target is other side.
+                // If walking, target is down the street.
 
-                // 1. Check Outer Bounds (Sidewalk Edges)
-                if (localX < ped.bounds.minX || localX > ped.bounds.maxX ||
-                    localZ < ped.bounds.minZ || localZ > ped.bounds.maxZ) {
+                // State Logic
+                this.updateState(ped, delta);
 
-                    this.reflect(ped);
-                    this.clamp(ped, localX, localZ);
-                    turned = true;
+                if (ped.state !== 'WAITING') {
+                    const seek = this.seek(ped, ped.target);
+                    force.add(seek);
+
+                    // 2. Behavior: Avoid Buildings (Obstacles)
+                    // Simple radial repulsion from building center
+                    const buildRepel = this.avoidBuilding(ped);
+                    force.add(buildRepel.multiplyScalar(3.0)); // High priority
                 }
 
-                // 2. Check Inner Building Collision (The Hole)
-                if (!turned && ped.bounds.buildingCenterX !== undefined) {
-                    const dx = Math.abs(localX - ped.bounds.buildingCenterX);
-                    const dz = Math.abs(localZ - ped.bounds.buildingCenterZ);
+                // Apply Physics
+                ped.acceleration.copy(force);
+                // Limit Accel? No, mass = 1.
 
-                    if (dx < ped.bounds.buildingHalfWidth && dz < ped.bounds.buildingHalfWidth) {
-                        // Inside building -> Turn around
-                        this.reflect(ped);
-                        // Push out slightly to avoid sticking
-                        // Ideally push along the axis of penetration, but simple bounce works for now
-                        turned = true;
-                    }
+                ped.velocity.add(ped.acceleration.multiplyScalar(delta));
+                if (ped.velocity.length() > this.maxSpeed) {
+                    ped.velocity.setLength(this.maxSpeed);
                 }
 
-                // Random wandering turn
-                if (!turned && Math.random() < 0.02) {
-                    const randomTurn = (Math.random() - 0.5) * 1.5;
-                    ped.direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), randomTurn);
-                }
+                if (ped.state === 'WAITING') ped.velocity.set(0, 0, 0);
 
-                ped.mesh.lookAt(ped.mesh.position.clone().add(ped.direction));
+                ped.mesh.position.add(ped.velocity.clone().multiplyScalar(delta));
+
+                if (ped.velocity.lengthSq() > 0.01) {
+                    ped.mesh.lookAt(ped.mesh.position.clone().add(ped.velocity));
+                }
 
                 // Animation
-                ped.legAnimTimer += delta * 10;
-                ped.leftLeg.rotation.x = Math.sin(ped.legAnimTimer) * 0.5;
-                ped.rightLeg.rotation.x = Math.sin(ped.legAnimTimer + Math.PI) * 0.5;
+                if (ped.velocity.lengthSq() > 0.1) {
+                    ped.legAnimTimer += delta * 10;
+                    ped.leftLeg.rotation.x = Math.sin(ped.legAnimTimer) * 0.5;
+                    ped.rightLeg.rotation.x = Math.sin(ped.legAnimTimer + Math.PI) * 0.5;
+                } else {
+                    ped.leftLeg.rotation.x = 0;
+                    ped.rightLeg.rotation.x = 0;
+                }
             });
         }
     }
 
-    reflect(ped) {
-        ped.direction.negate();
-        const randomTurn = (Math.random() - 0.5) * 1.0;
-        ped.direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), randomTurn);
+    updateState(ped, delta) {
+        const localX = ped.mesh.position.x - ped.chunkX;
+        const localZ = ped.mesh.position.z - ped.chunkZ;
+        const roadHalf = this.roadWidth / 2;
+
+        if (ped.state === 'WALKING') {
+            // Check if reached curb (Intersection edge)
+            // Curb is at |local| = roadHalf (approx 12)
+
+            // Should we cross?
+            // If moving towards intersection (velocity checks)
+            // And within 1m of curb
+
+            const distX = Math.abs(localX) - roadHalf;
+            const distZ = Math.abs(localZ) - roadHalf;
+
+            // If walking off the block (outwards) -> Keep walking (natural, switching chunks)
+            // If walking INTO intersection (inwards) -> Stop/Cross
+
+            // Check if inside "Intersection Zone"
+            // Wait, if |local| < roadHalf, they are IN road.
+            // We want to stop just BEFORE.
+
+            if ((Math.abs(localX) < roadHalf + 1 && Math.abs(localZ) < roadHalf + 20) ||
+                (Math.abs(localZ) < roadHalf + 1 && Math.abs(localX) < roadHalf + 20)) {
+
+                // Which axis are we trying to cross?
+                // Velocity implies direction.
+                const vx = Math.abs(ped.velocity.x);
+                const vz = Math.abs(ped.velocity.z);
+
+                if (vx > vz) {
+                    // Moving X. Entering intersection X-wise?
+                    // Only if |localZ| is small enough to be near the crossing point.
+                    // Actually, simplify:
+                    // If moving X towards 0 and near curb x=12.
+                    if (Math.abs(localX) < roadHalf + 0.5 && Math.abs(localX) > roadHalf - 1.0) {
+                        // At curb.
+                        ped.state = 'WAITING';
+                        ped.waitTimer = 0;
+                        ped.crossAxis = 'x';
+                    }
+                } else {
+                    if (Math.abs(localZ) < roadHalf + 0.5 && Math.abs(localZ) > roadHalf - 1.0) {
+                        ped.state = 'WAITING';
+                        ped.waitTimer = 0;
+                        ped.crossAxis = 'z';
+                    }
+                }
+            }
+        } else if (ped.state === 'WAITING') {
+            // Check Lights
+            if (this.trafficLightSystem) {
+                // Determine integer chunk coords
+                const cx = Math.round(ped.chunkX / ped.chunkSize);
+                const cz = Math.round(ped.chunkZ / ped.chunkSize);
+
+                // Pedestrians cross when Traffic is RED.
+                // Light checkGreenLight returns true if Green/Yellow for cars.
+                // So checking 'x' gives car state for X-road.
+                // If we want to cross X-road (walking along X), we look at X-light?
+                // No. If walking along X, we cross the Z-street? 
+
+                /*
+                   | Z |
+                --+---+--
+                   |   |
+                   X
+                If walking X axis, we cross the perpendicular street (Z-axis occupied road)?
+                Wait, if moving along X, we walk parallel to X-road. We only cross if we want to change blocks?
+                Ah, intersections.
+                If I walk +X, I hit the intersection. To continue +X, I must cross the Z-road.
+                The Z-road traffic is controlled by NsGreen.
+                If NsGreen is TRUE, Z-cars are moving. I must WAIT.
+                So I cross if checkGreenLight(..., 'z') is FALSE.
+                */
+
+                let carGreen = false;
+                if (ped.crossAxis === 'x') {
+                    // Walking X, Crossing Z-street. (Perpendicular to walking dir)
+                    // Cars on Z street matter.
+                    carGreen = this.trafficLightSystem.checkGreenLight(cx, cz, 'z');
+                } else {
+                    // Walking Z, Crossing X-street.
+                    carGreen = this.trafficLightSystem.checkGreenLight(cx, cz, 'x');
+                }
+
+                if (!carGreen) {
+                    // Walk signal!
+                    ped.state = 'CROSSING';
+                    // Target safety on other side
+                    // If crossing Z-street (walking X), target.x += roadWidth + 5
+                    if (ped.crossAxis === 'x') {
+                        const sign = ped.target.x > ped.mesh.position.x ? 1 : -1;
+                        ped.crossingTarget = new THREE.Vector3(ped.mesh.position.x + sign * (this.roadWidth + 4), 0, ped.mesh.position.z);
+                    } else {
+                        const sign = ped.target.z > ped.mesh.position.z ? 1 : -1;
+                        ped.crossingTarget = new THREE.Vector3(ped.mesh.position.x, 0, ped.mesh.position.z + sign * (this.roadWidth + 4));
+                    }
+                }
+            } else {
+                // No lights, wait random
+                ped.waitTimer += delta;
+                if (ped.waitTimer > 2.0) ped.state = 'CROSSING';
+            }
+
+        } else if (ped.state === 'CROSSING') {
+            // Seek crossing target overrides normal target
+            // Once reached, switch back to WALKING
+            const dist = ped.mesh.position.distanceTo(ped.crossingTarget);
+            if (dist < 1.0) {
+                ped.state = 'WALKING';
+                // Restore long term target (it was never removed)
+            } else {
+                // Temp override of seek logic in update()
+                // Actually easier to just swap target or add behavior priority
+            }
+        }
+
     }
 
-    clamp(ped, lx, lz) {
-        const cx = Math.max(ped.bounds.minX, Math.min(ped.bounds.maxX, lx));
-        const cz = Math.max(ped.bounds.minZ, Math.min(ped.bounds.maxZ, lz));
-        ped.mesh.position.x = ped.chunkX + cx;
-        ped.mesh.position.z = ped.chunkZ + cz;
+    seek(ped, targetPos) {
+        // Special case for CROSSING
+        const dest = (ped.state === 'CROSSING' && ped.crossingTarget) ? ped.crossingTarget : targetPos;
+
+        const desired = new THREE.Vector3().subVectors(dest, ped.mesh.position);
+        desired.normalize().multiplyScalar(this.maxSpeed);
+        const steer = new THREE.Vector3().subVectors(desired, ped.velocity);
+        // steer.clampLength(0, this.maxForce); // Helper not avail, manual:
+        if (steer.length() > this.maxForce) steer.setLength(this.maxForce);
+        return steer;
+    }
+
+    avoidBuilding(ped) {
+        // If close to building center, reflect out.
+        // We know building center from bounds.
+        // It's a box [cx-hw, cx+hw].
+        const lx = ped.mesh.position.x - ped.chunkX;
+        const lz = ped.mesh.position.z - ped.chunkZ;
+
+        const dx = lx - ped.bounds.buildingCenterX;
+        const dz = lz - ped.bounds.buildingCenterZ;
+        const adx = Math.abs(dx);
+        const adz = Math.abs(dz);
+        const hw = ped.bounds.buildingHalfWidth; // Includes margin
+
+        if (adx < hw && adz < hw) {
+            // Inside!
+            // Calculate vector out
+            const steer = new THREE.Vector3(dx, 0, dz);
+            steer.normalize().multiplyScalar(this.maxForce * 2);
+            return steer;
+        }
+        return new THREE.Vector3(0, 0, 0);
     }
 }

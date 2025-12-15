@@ -126,92 +126,43 @@ function createProceduralBuilding(x, z, width, chunkGroup, colliders) {
     }
 }
 
-function addWindows(mesh, w, h, d, density) {
-    // Simple scattered windows on faces
-    // We can just add child meshes relative to the parent? No, logic is separated.
-    // Let's spawn new global meshes to avoid hierarchy complexity with scaling.
-    const numWin = Math.floor(w * h * density * 0.5);
-    for (let i = 0; i < numWin; i++) {
-        const win = new THREE.Mesh(windowGeom, matCache.window);
-        const side = Math.floor(Math.random() * 4);
-
-        // Random Y
-        const y = mesh.position.y - h / 2 + Math.random() * h;
-        // Random Offset
-        const off = (Math.random() - 0.5) * (side % 2 === 0 ? w : d);
-
-        // Adjust for window size to stay inside
-        if (Math.abs(off) > (side % 2 === 0 ? w / 2 - 0.5 : d / 2 - 0.5)) continue;
-
-        if (side === 0) { // Front (+Z)
-            win.position.set(mesh.position.x + off, y, mesh.position.z + d / 2 + 0.05);
-        } else if (side === 1) { // Back (-Z)
-            win.position.set(mesh.position.x + off, y, mesh.position.z - d / 2 - 0.05);
-            win.rotation.y = Math.PI;
-        } else if (side === 2) { // Right (+X)
-            win.position.set(mesh.position.x + w / 2 + 0.05, y, mesh.position.z + off);
-            win.rotation.y = Math.PI / 2;
-        } else { // Left (-X)
-            win.position.set(mesh.position.x - w / 2 - 0.05, y, mesh.position.z + off);
-            win.rotation.y = -Math.PI / 2;
-        }
-        // Don't modify chunks inside this loop helper directly, need access to chunkGroup.
-        // Quick hack: pass chunkGroup or just return arrays?
-        // Actually, createProceduralBuilding has scope.
-        // Let's inline this logic or pass group.
-    }
-}
-// REDEFINING addWindows properly to take group
-function spawnWindows(x, y, z, w, h, d, group) {
+// REDEFINING addWindows to use InstancedMesh logic.
+// Instead of adding meshes, we push matrices to an array.
+function spawnWindowMatrices(x, y, z, w, h, d, matrices) {
     const floors = Math.floor(h / 1.5);
     const cols = Math.floor(w / 1.5);
 
-    // Grid pattern instead of random
+    const dummy = new THREE.Object3D();
+
     for (let f = 0; f < floors; f++) {
-        if (Math.random() > 0.8) continue; // Skip some floors
+        if (Math.random() > 0.8) continue;
         const yPos = y - h / 2 + 1 + f * 1.5;
 
         for (let c = 0; c < cols; c++) {
-            // 4 Sides
             const offset = -w / 2 + 1 + c * 1.5;
 
-            // +Z
-            if (Math.random() < 0.7) {
-                const win = new THREE.Mesh(windowGeom, matCache.window);
-                win.position.set(x + offset, yPos, z + d / 2 + 0.05);
-                group.add(win);
-            }
-            // -Z
-            if (Math.random() < 0.7) {
-                const win = new THREE.Mesh(windowGeom, matCache.window);
-                win.position.set(x + offset, yPos, z - d / 2 - 0.05);
-                win.rotation.y = Math.PI;
-                group.add(win);
-            }
-            // +X
-            if (Math.random() < 0.7) {
-                const win = new THREE.Mesh(windowGeom, matCache.window);
-                win.position.set(x + w / 2 + 0.05, yPos, z + offset);
-                win.rotation.y = Math.PI / 2;
-                group.add(win);
-            }
-            // -X
-            if (Math.random() < 0.7) {
-                const win = new THREE.Mesh(windowGeom, matCache.window);
-                win.position.set(x - w / 2 - 0.05, yPos, z + offset);
-                win.rotation.y = -Math.PI / 2;
-                group.add(win);
-            }
+            const add = (px, py, pz, ry) => {
+                if (Math.random() < 0.7) {
+                    dummy.position.set(px, py, pz);
+                    dummy.rotation.set(0, ry, 0);
+                    dummy.scale.set(1, 1, 1);
+                    dummy.updateMatrix();
+                    matrices.push(dummy.matrix.clone());
+                }
+            };
+
+            add(x + offset, yPos, z + d / 2 + 0.05, 0);
+            add(x + offset, yPos, z - d / 2 - 0.05, Math.PI);
+            add(x + w / 2 + 0.05, yPos, z + offset, Math.PI / 2);
+            add(x - w / 2 - 0.05, yPos, z + offset, -Math.PI / 2);
         }
     }
 }
 
-// Rewriting createProceduralBuilding to use clean spawnWindows
-function createNYCBuilding(x, z, width, chunkGroup, colliders) {
+function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
     const style = Math.floor(Math.random() * 3);
-    const height = 20 + Math.random() * 50; // Taller! 20-70
+    const height = 20 + Math.random() * 50;
 
-    // Collider (Base)
     const box = new THREE.Box3();
     box.min.set(x - width / 2, 0, z - width / 2);
     box.max.set(x + width / 2, height, z + width / 2);
@@ -225,7 +176,7 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
         b1.scale.set(width, h1, width);
         b1.receiveShadow = true; b1.castShadow = true;
         chunkGroup.add(b1);
-        spawnWindows(x, h1 / 2, z, width, h1, width, chunkGroup);
+        spawnWindowMatrices(x, h1 / 2, z, width, h1, width, windowMatrices);
 
         const h2 = height * 0.35;
         const w2 = width * 0.7;
@@ -234,7 +185,7 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
         b2.scale.set(w2, h2, w2);
         b2.receiveShadow = true; b2.castShadow = true;
         chunkGroup.add(b2);
-        spawnWindows(x, h1 + h2 / 2, z, w2, h2, w2, chunkGroup);
+        spawnWindowMatrices(x, h1 + h2 / 2, z, w2, h2, w2, windowMatrices);
 
         const h3 = height * 0.2;
         const w3 = width * 0.4;
@@ -244,7 +195,6 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
         b3.receiveShadow = true; b3.castShadow = true;
         chunkGroup.add(b3);
 
-        // Antenna
         const ant = new THREE.Mesh(buildingGeom, matCache.metalGold);
         ant.position.set(x, height + 4, z);
         ant.scale.set(0.3, 8, 0.3);
@@ -259,7 +209,6 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
         b.castShadow = true; b.receiveShadow = true;
         chunkGroup.add(b);
 
-        // Roof
         const roof = new THREE.Mesh(buildingGeom, matCache.sidewalk);
         roof.position.set(x, height + 0.5, z);
         roof.scale.set(width, 1, width);
@@ -273,9 +222,8 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
         b.scale.set(width, height, width);
         b.castShadow = true; b.receiveShadow = true;
         chunkGroup.add(b);
-        spawnWindows(x, height / 2, z, width, height, width, chunkGroup);
+        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
 
-        // Gold Trim Corners
         const pw = 0.6;
         const corners = [{ x: -1, z: -1 }, { x: 1, z: -1 }, { x: 1, z: 1 }, { x: -1, z: 1 }];
         corners.forEach(c => {
@@ -287,7 +235,7 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders) {
     }
 }
 
-export function createCityChunk(xPos, zPos, size, roadWidth = 14) {
+export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
     const chunkGroup = new THREE.Group();
     const colliders = [];
 
@@ -327,6 +275,9 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 14) {
         { x: -offset, z: offset }
     ];
 
+    // Matrices for Instanced Windows
+    const windowMatrices = [];
+
     corners.forEach(corner => {
         // Sidewalk
         const sw = new THREE.Mesh(sidewalkGeom, matCache.sidewalk);
@@ -339,10 +290,21 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 14) {
         if (Math.random() > 0.2) { // 80% density
             const width = cornerSize - 4; // Margin
             if (width > 2) {
-                createNYCBuilding(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders);
+                createNYCBuilding(xPos + corner.x, zPos + corner.z, width, chunkGroup, colliders, windowMatrices);
             }
         }
     });
+
+    // Create Instanced Mesh for windows if any
+    if (windowMatrices.length > 0) {
+        const instancedWindows = new THREE.InstancedMesh(windowGeom, matCache.window, windowMatrices.length);
+
+        for (let i = 0; i < windowMatrices.length; i++) {
+            instancedWindows.setMatrixAt(i, windowMatrices[i]);
+        }
+        instancedWindows.instanceMatrix.needsUpdate = true;
+        chunkGroup.add(instancedWindows);
+    }
 
     return { mesh: chunkGroup, colliders: colliders };
 }
@@ -402,7 +364,7 @@ export async function createWorld(scene) {
     // We return empty world data, main.js will use ChunkManager
     return {
         citySize: 1000, // Virtual size
-        blockSize: 30, // 30 + 24 = 54 total chunk size
+        blockSize: 100, // 100 + 24 = 124 total chunk size
         roadWidth: 24,
         colliders: [], // No static colliders upfront
         cubes: [], // Empty for now, NMS world doesn't have static collectibles yet

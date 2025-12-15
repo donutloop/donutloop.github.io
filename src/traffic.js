@@ -122,9 +122,10 @@ export class TrafficSystem {
         return null;
     }
 
-    setDependencies(player, parkingSystem) {
+    setDependencies(player, parkingSystem, trafficLightSystem) {
         this.player = player;
         this.parkingSystem = parkingSystem;
+        this.trafficLightSystem = trafficLightSystem; // [NEW]
     }
 
     update(delta) {
@@ -179,6 +180,56 @@ export class TrafficSystem {
     }
 
     checkBlocked(car, externalObstacles) {
+        // 1. Check Traffic Light (New)
+        if (this.trafficLightSystem) {
+            // Are we near an intersection?
+            // Chunk Center is intersection.
+            const localX = car.mesh.position.x - car.chunkX;
+            const localZ = car.mesh.position.z - car.chunkZ;
+
+            // Stop Line distance from center.
+            // Road Width 24. Stop line at +/- 14?
+            const stopLine = this.roadWidth / 2 + 3; // 12 + 3 = 15
+            const checkDist = 18; // Distance to start checking
+
+            // If moving towards center and within range
+            // We only care if we are ENTERING the intersection.
+            // If |local| < stopLine, we are inside or passed it.
+            // If |local| > stopLine and |local| < checkDist...
+
+            let mustStop = false;
+
+            // Derive integer grid coords from chunkX/Z
+            // chunk size 54.
+            const cx = Math.round(car.chunkX / car.chunkSize);
+            const cz = Math.round(car.chunkZ / car.chunkSize);
+
+            if (car.axis === 'x') {
+                // Moving on X. Check localX.
+                if (Math.abs(localX) > stopLine && Math.abs(localX) < checkDist) {
+                    // Moving towards 0?
+                    // If localX > 0 and direction -1 -> Yes
+                    // If localX < 0 and direction 1 -> Yes
+                    const movingIn = (localX > 0 && car.direction < 0) || (localX < 0 && car.direction > 0);
+
+                    if (movingIn) {
+                        const green = this.trafficLightSystem.checkGreenLight(cx, cz, 'x');
+                        if (!green) mustStop = true;
+                    }
+                }
+            } else {
+                if (Math.abs(localZ) > stopLine && Math.abs(localZ) < checkDist) {
+                    const movingIn = (localZ > 0 && car.direction < 0) || (localZ < 0 && car.direction > 0);
+                    if (movingIn) {
+                        const green = this.trafficLightSystem.checkGreenLight(cx, cz, 'z');
+                        if (!green) mustStop = true;
+                    }
+                }
+            }
+
+            if (mustStop) return true;
+        }
+
         const checkDist = 12.0; // Distance to check ahead
         const laneWidth = 2.5; // Lateral leeway (cars are ~2 wide)
 
