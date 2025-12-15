@@ -677,14 +677,14 @@ export class Player {
         victimPhysicsState.velocity.add(impulse);
 
         // Speed-Dependent Bounce (Lift)
-        // If speed > 25 (approx 50mph), start lifting
-        if (playerSpeed > 25) {
+        // If speed > 30 (approx 60mph), start lifting
+        if (playerSpeed > 30) {
             // physics: Force from bumper lifts the car?
-            const lift = (playerSpeed - 25) * 0.05; // Gentle scaling
-            victimPhysicsState.velocity.y += Math.min(lift, 2.0); // Cap at 2.0 (Realistic hop)
+            const lift = (playerSpeed - 30) * 0.02; // Very gentle scaling
+            victimPhysicsState.velocity.y += Math.min(lift, 1.0); // Cap at 1.0 (Small hop)
 
             // Add slight randomness to bounce
-            victimPhysicsState.velocity.y += Math.random() * 0.2;
+            victimPhysicsState.velocity.y += Math.random() * 0.1;
         } else {
             victimPhysicsState.velocity.y = 0; // Grounded at low/medium speed
         }
