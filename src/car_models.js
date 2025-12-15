@@ -18,6 +18,14 @@ export function createCarMesh(type = 'sedan', color = null) {
             // Vibrant
             const hue = Math.random() > 0.5 ? 0.0 : (Math.random() > 0.5 ? 0.15 : 0.6); // Red, Yellow, Blue
             color = new THREE.Color().setHSL(hue, 0.9, 0.5);
+        } else if (type === 'taxi') {
+            color = new THREE.Color(0xffcc00); // Always Yellow
+        } else if (type === 'bus') {
+            // Bus Colors
+            const r = Math.random();
+            if (r < 0.33) color = new THREE.Color(0x3366cc); // Blue
+            else if (r < 0.66) color = new THREE.Color(0xcc3333); // Red
+            else color = new THREE.Color(0xeeeeee); // White
         } else {
             // Sedan: Generic
             color = new THREE.Color().setHSL(Math.random(), 0.5, 0.5);
@@ -157,6 +165,47 @@ export function createCarMesh(type = 'sedan', color = null) {
         // Wheels (6 wheels?)
         addWheel(-1.1, 0.5, 2.5, 1.5); addWheel(1.1, 0.5, 2.5, 1.5);
         addWheel(-1.1, 0.5, -2.5, 1.5); addWheel(1.1, 0.5, -2.5, 1.5);
+
+    } else if (type === 'taxi') {
+        // TAXI (Yellow Sedan + Sign)
+        const width = 1.9;
+        const length = 4.4; // Slightly longer
+        const chassisY = 0.5;
+
+        // Always Yellow
+        if (!color) color = new THREE.Color(0xffcc00);
+
+        // Base Sedan Body
+        const body = new THREE.Mesh(new THREE.BoxGeometry(width, 0.7, length, 8, 4, 12), paintMat);
+        body.position.y = chassisY + 0.1;
+        body.castShadow = true;
+        carGroup.add(body);
+
+        // Cabin
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(width - 0.2, 0.6, 2.0, 6, 2, 6), paintMat);
+        cabin.position.set(0, chassisY + 0.6, -0.1);
+        carGroup.add(cabin);
+
+        // Windshield
+        const glass = new THREE.Mesh(new THREE.BoxGeometry(width - 0.25, 0.4, 0.1), glassMat);
+        glass.position.set(0, chassisY + 0.6, 0.9);
+        glass.rotation.x = -0.1;
+        carGroup.add(glass);
+
+        // Rear Window
+        const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(width - 0.25, 0.4, 0.1), glassMat);
+        rearGlass.position.set(0, chassisY + 0.6, -1.1);
+        rearGlass.rotation.x = 0.1;
+        carGroup.add(rearGlass);
+
+        // Wheels
+        addWheel(-0.9, 0.35, 1.2); addWheel(0.9, 0.35, 1.2);
+        addWheel(-0.9, 0.35, -1.2); addWheel(0.9, 0.35, -1.2);
+
+        // TAXI SIGN
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.3), lightMat);
+        sign.position.set(0, chassisY + 0.95, -0.2);
+        carGroup.add(sign);
 
     } else if (type === 'suv') {
         const width = 2.1;

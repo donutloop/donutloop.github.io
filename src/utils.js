@@ -31,14 +31,16 @@ export function disposeCar(carGroup) {
 
 export function getRandomCarType() {
     const r = Math.random();
-    // Sedan: 40% (0.0 - 0.4)
-    // SUV: 30% (0.4 - 0.7)
-    // Truck: 15% (0.7 - 0.85)
+    // Sedan: 30% (0.0 - 0.3)
+    // Taxi: 15% (0.3 - 0.45)
+    // SUV: 30% (0.45 - 0.75)
+    // Truck: 10% (0.75 - 0.85)
     // Bus: 10% (0.85 - 0.95)
     // Sport: 5% (0.95 - 1.0)
 
-    if (r < 0.4) return 'sedan';
-    if (r < 0.7) return 'suv';
+    if (r < 0.30) return 'sedan';
+    if (r < 0.45) return 'taxi';
+    if (r < 0.75) return 'suv';
     if (r < 0.85) return 'truck';
     if (r < 0.95) return 'bus';
     return 'sport';

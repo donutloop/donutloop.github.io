@@ -759,6 +759,7 @@ export class Player {
     getCarStats(type) {
         switch (type) {
             case 'sport': return { maxSpeed: 60, acceleration: 40 };
+            case 'taxi': return { maxSpeed: 55, acceleration: 40 };
             case 'sedan': return { maxSpeed: 45, acceleration: 30 };
             case 'suv': return { maxSpeed: 40, acceleration: 25 };
             case 'truck': return { maxSpeed: 35, acceleration: 20 };

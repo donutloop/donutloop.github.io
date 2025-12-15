@@ -18,6 +18,7 @@ export class TrafficSystem {
     getSpeedForType(type) {
         switch (type) {
             case 'sport': return 16;
+            case 'taxi': return 13; // Fast city driver
             case 'sedan': return 11;
             case 'suv': return 9;
             case 'truck': return 6;
