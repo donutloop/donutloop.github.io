@@ -45,11 +45,23 @@ export class Player {
         instructions.style.display = 'flex';
         instructions.style.alignItems = 'center';
         instructions.style.justifyContent = 'center';
-        instructions.style.background = 'rgba(0,0,0,0.5)';
+        instructions.style.background = 'rgba(0,0,0,0.8)';
+        instructions.style.zIndex = '1000'; // Force On Top
+        instructions.style.cursor = 'pointer';
         instructions.style.color = '#ffffff';
         instructions.style.fontSize = '24px';
         instructions.style.fontFamily = 'sans-serif';
-        instructions.innerHTML = 'Click to Play';
+        instructions.style.flexDirection = 'column';
+        instructions.style.textAlign = 'center';
+        instructions.innerHTML = `
+            <h1>Worldloop</h1>
+            <p style="font-size: 18px; margin-top: 20px;">
+                WASD = Move | Mouse = Look<br>
+                ENTER = Enter/Exit Car<br>
+                1, 2, 3 = Change Weather
+            </p>
+        `;
+        document.body.appendChild(instructions);
         // DEBUG OVERLAY
         const debugDiv = document.createElement('div');
         debugDiv.style.position = 'absolute';

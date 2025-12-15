@@ -10,16 +10,20 @@ const roadGeom = new THREE.PlaneGeometry(1, 1);
 const matCache = {
     road: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }),
     sidewalk: new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 }),
-    building: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2, metalness: 0.5 }), // Fallback/Dark
+    building: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2, metalness: 0.5 }), // Fallback
     window: new THREE.MeshBasicMaterial({ color: 0xffffaa }),
     lane: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     ground: new THREE.MeshStandardMaterial({ color: 0x3a2e26, roughness: 1.0 }),
     // NYC Materials
     stoneA: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9 }), // Concrete/Limestone
     stoneB: new THREE.MeshStandardMaterial({ color: 0xaa9988, roughness: 0.9 }), // Warm Stone
-    glassBlue: new THREE.MeshStandardMaterial({ color: 0x112244, roughness: 0.0, metalness: 0.9 }), // Modern Glass
-    glassBlack: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.0, metalness: 0.9 }), // Sleek Glass
+    glassBlue: new THREE.MeshStandardMaterial({ color: 0x224488, roughness: 0.1, metalness: 0.8 }), // Lighter
+    glassBlack: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.1, metalness: 0.8 }), // Lighter
     metalGold: new THREE.MeshStandardMaterial({ color: 0xccaa44, roughness: 0.3, metalness: 0.8 }), // Art Deco Trim
+    brick: new THREE.MeshStandardMaterial({ color: 0x884433, roughness: 0.9 }), // Red Brick
+    cyberDark: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.9 }),
+    neonPink: new THREE.MeshBasicMaterial({ color: 0xff00ff }),
+    neonCyan: new THREE.MeshBasicMaterial({ color: 0x00ffff }),
     roof: new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 1.0 })
 };
 
@@ -160,16 +164,17 @@ function spawnWindowMatrices(x, y, z, w, h, d, matrices) {
 }
 
 function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
-    const style = Math.floor(Math.random() * 3);
+    const style = Math.floor(Math.random() * 5); // 0-4
     const height = 20 + Math.random() * 50;
 
+    // Collider
     const box = new THREE.Box3();
     box.min.set(x - width / 2, 0, z - width / 2);
     box.max.set(x + width / 2, height, z + width / 2);
     colliders.push(box);
 
     if (style === 0) {
-        // Setback
+        // --- Classic Setback ---
         const h1 = height * 0.45;
         const b1 = new THREE.Mesh(buildingGeom, matCache.stoneA);
         b1.position.set(x, h1 / 2, z);
@@ -194,6 +199,7 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
         b3.scale.set(w3, h3, w3);
         b3.receiveShadow = true; b3.castShadow = true;
         chunkGroup.add(b3);
+        spawnWindowMatrices(x, h1 + h2 + h3 / 2, z, w3, h3, w3, windowMatrices);
 
         const ant = new THREE.Mesh(buildingGeom, matCache.metalGold);
         ant.position.set(x, height + 4, z);
@@ -201,7 +207,8 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
         chunkGroup.add(ant);
 
     } else if (style === 1) {
-        // Glass
+        // --- Modern Glass ---
+        // Changed: Lighter glass materials + Windows
         const mat = Math.random() > 0.5 ? matCache.glassBlue : matCache.glassBlack;
         const b = new THREE.Mesh(buildingGeom, mat);
         b.position.set(x, height / 2, z);
@@ -209,13 +216,16 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
         b.castShadow = true; b.receiveShadow = true;
         chunkGroup.add(b);
 
+        // Add sparse windows to look like lit offices behind glass
+        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
+
         const roof = new THREE.Mesh(buildingGeom, matCache.sidewalk);
         roof.position.set(x, height + 0.5, z);
         roof.scale.set(width, 1, width);
         chunkGroup.add(roof);
 
-    } else {
-        // Art Deco
+    } else if (style === 2) {
+        // --- Art Deco ---
         const mat = matCache.stoneB;
         const b = new THREE.Mesh(buildingGeom, mat);
         b.position.set(x, height / 2, z);
@@ -232,6 +242,41 @@ function createNYCBuilding(x, z, width, chunkGroup, colliders, windowMatrices) {
             p.scale.set(pw, height, pw);
             chunkGroup.add(p);
         });
+    } else if (style === 3) {
+        // --- Brick Apartment ---
+        const b = new THREE.Mesh(buildingGeom, matCache.brick);
+        b.position.set(x, height / 2, z);
+        b.scale.set(width, height, width);
+        b.castShadow = true; b.receiveShadow = true;
+        chunkGroup.add(b);
+        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
+
+        // Fire Escapes (Stylized stripes)
+        const s = new THREE.Mesh(buildingGeom, matCache.sidewalk);
+        s.position.set(x + width / 2 + 0.1, height / 2, z);
+        s.scale.set(0.2, height * 0.8, 1.5);
+        chunkGroup.add(s);
+    } else {
+        // --- Futuristic Cyberpunk ---
+        const b = new THREE.Mesh(buildingGeom, matCache.cyberDark);
+        b.position.set(x, height / 2, z);
+        b.scale.set(width, height, width);
+        b.castShadow = true; b.receiveShadow = true;
+        chunkGroup.add(b);
+
+        // Neon Strips
+        const neonColor = Math.random() > 0.5 ? matCache.neonPink : matCache.neonCyan;
+        const n = new THREE.Mesh(buildingGeom, neonColor);
+        n.position.set(x, height * 0.8, z);
+        n.scale.set(width + 0.1, 0.5, width + 0.1); // Ring
+        chunkGroup.add(n);
+
+        const n2 = new THREE.Mesh(buildingGeom, neonColor);
+        n2.position.set(x, height * 0.4, z);
+        n2.scale.set(width + 0.1, 0.5, width + 0.1); // Ring
+        chunkGroup.add(n2);
+
+        spawnWindowMatrices(x, height / 2, z, width, height, width, windowMatrices);
     }
 }
 

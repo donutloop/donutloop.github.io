@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { initScene, animate } from './scene.js';
-import { createWorld } from './world.js?v=102';
-import { Player } from './player.js?v=103';
+import { createWorld } from './world.js?v=FIX_MATS_3';
+import { Player } from './player.js?v=WORLDLOOP_1';
 import { TrafficSystem } from './traffic.js?v=102';
 import { WeatherSystem } from './weather.js?v=100';
 import { PedestrianSystem } from './pedestrians.js?v=100';
@@ -132,7 +132,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.0 - SMART CITY';
+        verDiv.innerHTML = 'v5.1 - ARCHITECTURE UPDATE';
         document.body.appendChild(verDiv);
 
         animate(() => {
