@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { initScene, animate } from './scene.js';
-import { createWorld } from './world.js?v=WORLDLOOP_5.15.35';
-import { Player } from './player.js?v=WORLDLOOP_5.15.35';
-import { TrafficSystem } from './traffic.js?v=WORLDLOOP_5.15.35';
-import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.15.35';
-import { PedestrianSystem } from './pedestrians.js?v=WORLDLOOP_5.15.35';
-import { ParkingSystem } from './parking.js?v=WORLDLOOP_5.15.35';
+import { createWorld } from './world.js';
+import { Player } from './player.js';
+import { TrafficSystem } from './traffic.js';
+import { WeatherSystem } from './weather.js';
+import { PedestrianSystem } from './pedestrians.js';
+import { ParkingSystem } from './parking.js';
 import { AirplaneSystem } from './airplanes.js';
 import { EffectSystem } from './effects.js';
 import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
-import { ChunkManager } from './chunk_manager.js?v=WORLDLOOP_5.15.35';
+import { ChunkManager } from './chunk_manager.js';
 
 let player;
 let prevTime = performance.now();
@@ -124,8 +124,7 @@ async function init() {
         weatherInfo.innerHTML = '[1] Sunny [2] Rain [3] Snow';
         document.body.appendChild(weatherInfo);
 
-        // Version Indicator to debug cache issues
-        // Version Indicator to debug cache issues
+        // Version Display
         const verDiv = document.createElement('div');
         verDiv.style.position = 'absolute';
         verDiv.style.bottom = '10px';
@@ -134,7 +133,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.15.35 - GIT READY';
+        verDiv.innerHTML = 'v5.15.38';
         document.body.appendChild(verDiv);
 
         animate(() => {

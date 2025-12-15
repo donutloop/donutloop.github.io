@@ -129,11 +129,13 @@ export class EffectSystem {
 
                     // If it was attached, we set initial position in world space based on parent
                     if (p.mesh.userData.parent && p.life > p.mesh.userData.life - 0.1) {
-                        // only sync on first frame? No, we spawn them in world space.
-                        // Let's just treat them as normal particles after spawn
-                        const worldPos = p.mesh.userData.offset.clone();
-                        worldPos.applyMatrix4(p.mesh.userData.parent.matrixWorld);
-                        p.mesh.position.copy(worldPos);
+                        const parent = p.mesh.userData.parent;
+                        // Safety Check: Ensure parent has valid matrixWorld
+                        if (parent && parent.matrixWorld) {
+                            const worldPos = p.mesh.userData.offset.clone();
+                            worldPos.applyMatrix4(parent.matrixWorld);
+                            p.mesh.position.copy(worldPos);
+                        }
                         p.isAttached = false; // Detach immediately so it leaves a trail
                     }
                 } else {
