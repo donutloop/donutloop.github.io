@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SimplexNoise } from './noise.js';
-import { createCityChunk, createWastelandChunk } from './world.js'; // We will assume these exist
+import { createCityChunk, createWastelandChunk, createHighwayChunk } from './world.js'; // We will assume these exist
 
 export class ChunkManager {
     constructor(scene, player, worldData, trafficSystem, parkingSystem, pedestrianSystem, trafficLightSystem) {
@@ -60,8 +60,17 @@ export class ChunkManager {
         // Center (0,0) is always city
         // Center (0,0) is always city
         const dist = Math.sqrt(cx * cx + cz * cz);
-        // Strict City Limit: Radius 6 (approx 200m). No noise-based random cities to avoid "wasteland" confusion.
+        // Strict City Limit: Radius 6 (approx 200m).
         const isCity = dist < 6;
+
+        // Highway Detection
+        // X-Highway (East/West): Aligned with Z-axis of city (-5 to 5)
+        const isHighwayX = !isCity && Math.abs(cz) <= 5;
+        // Z-Highway (North/South): Aligned with X-axis of city (-5 to 5)
+        const isHighwayZ = !isCity && Math.abs(cx) <= 5;
+
+        // Combined Highway Flag
+        const isHighway = isHighwayX || isHighwayZ;
 
         // Offset position
         const xPos = cx * this.chunkSize;
@@ -71,12 +80,27 @@ export class ChunkManager {
 
         if (isCity) {
             chunkData = createCityChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth);
-
-            // Spawn City Population
-            if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz);
+            // Spawn Population (Full)
+            if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
             if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
             if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
             if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
+
+        } else if (isHighway) {
+            // Determine type
+            let type = 'x';
+            if (isHighwayX && isHighwayZ) type = 'cross';
+            else if (isHighwayZ) type = 'z';
+            // else type 'x' (default)
+
+            chunkData = createHighwayChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth, type);
+
+            // Spawn Population (Traffic Only)
+            // Pass specific highway biome/type to traffic system
+            if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, `highway_${type}`);
+
+            // No Parking/Pedestrians on highway
+
         } else {
             chunkData = createWastelandChunk(xPos, zPos, this.chunkSize);
             // Maybe spawn sparse traffic/elements in wasteland later?

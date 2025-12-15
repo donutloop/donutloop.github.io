@@ -354,6 +354,94 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
     return { mesh: chunkGroup, colliders: colliders };
 }
 
+
+export function createHighwayChunk(xPos, zPos, size, roadWidth, type = 'x') {
+    const chunkGroup = new THREE.Group();
+    const colliders = [];
+
+    // 1. Ground (Wasteland style but with road)
+    const ground = new THREE.Mesh(roadGeom, matCache.ground);
+    ground.position.set(xPos, -0.5, zPos);
+    ground.rotation.x = -Math.PI / 2;
+    ground.scale.set(size, size, 1);
+    ground.receiveShadow = true;
+    chunkGroup.add(ground);
+
+    // 2. Road Generation based on Type
+    const buildXRoad = (type === 'x' || type === 'cross');
+    const buildZRoad = (type === 'z' || type === 'cross');
+
+    if (buildXRoad) {
+        // Road Core X
+        const road = new THREE.Mesh(roadGeom, matCache.road);
+        road.position.set(xPos, 0.01, zPos);
+        road.rotation.x = -Math.PI / 2;
+        road.scale.set(size, roadWidth, 1);
+        road.receiveShadow = true;
+        chunkGroup.add(road);
+
+        // Lane Markings X
+        const laneH = new THREE.Mesh(roadGeom, matCache.lane);
+        laneH.position.set(xPos, 0.02, zPos);
+        laneH.rotation.x = -Math.PI / 2;
+        laneH.scale.set(size, 0.5, 1);
+        chunkGroup.add(laneH);
+    }
+
+    if (buildZRoad) {
+        // Road Core Z
+        const road = new THREE.Mesh(roadGeom, matCache.road);
+        road.position.set(xPos, 0.015, zPos); // Slightly higher to avoid z-fight at crossing
+        road.rotation.x = -Math.PI / 2;
+        road.scale.set(roadWidth, size, 1);
+        road.receiveShadow = true;
+        chunkGroup.add(road);
+
+        // Lane Markings Z
+        const laneV = new THREE.Mesh(roadGeom, matCache.lane);
+        laneV.position.set(xPos, 0.025, zPos);
+        laneV.rotation.x = -Math.PI / 2;
+        laneV.scale.set(0.5, size, 1);
+        chunkGroup.add(laneV);
+    }
+
+    // No Vertical Road.
+    // No Buildings.
+    // Maybe some random rocks on the side?
+
+    const numRocks = Math.floor(Math.random() * 3);
+    for (let i = 0; i < numRocks; i++) {
+        const rSize = Math.random() * 3 + 1;
+        const rock = new THREE.Mesh(buildingGeom, matCache.sidewalk);
+
+        // Spawn rocks OUTSIDE the road width
+        // Road is from z-width/2 to z+width/2.
+        // Chunk is from z-size/2 to z+size/2.
+
+        const margin = roadWidth / 2 + 2;
+        const range = (size / 2) - margin;
+
+        // Random Z side (North or South of road)
+        const side = Math.random() > 0.5 ? 1 : -1;
+        const offsetZ = margin + Math.random() * range;
+
+        rock.position.set(
+            xPos + (Math.random() - 0.5) * size,
+            rSize / 2 - 0.5,
+            zPos + side * offsetZ
+        );
+        rock.scale.set(rSize, rSize, rSize);
+        rock.rotation.set(Math.random(), Math.random(), Math.random());
+        rock.castShadow = true;
+        chunkGroup.add(rock);
+
+        const box = new THREE.Box3().setFromObject(rock);
+        colliders.push(box);
+    }
+
+    return { mesh: chunkGroup, colliders: colliders };
+}
+
 export function createWastelandChunk(xPos, zPos, size) {
     const chunkGroup = new THREE.Group();
     const colliders = [];

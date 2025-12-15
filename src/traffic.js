@@ -25,14 +25,7 @@ export class TrafficSystem {
         }
     }
 
-    loadChunk(cx, cz) {
-        // Only spawn traffic in City chunks (near 0,0 or high noise)
-        // We reuse the simple logic: if it's a city chunk, spawn cars.
-        // For now, let's assume we pass a flag or just blindly spawn and see.
-        // Better: let ChunkManager decide? Or just spawn everywhere for test.
-        // Let's spawn everywhere but fewer cars in wasteland if we could detect it.
-        // For now, consistent traffic.
-
+    loadChunk(cx, cz, biome = 'city') {
         const chunkCarsList = [];
         const numCars = 3; // Cars per chunk
 
@@ -40,39 +33,49 @@ export class TrafficSystem {
         const xOffset = cx * chunkSize;
         const zOffset = cz * chunkSize;
 
+        // Determine Allowed Axes based on Biome
+        let allowedAxes = ['x', 'z']; // Default City / Cross
+        if (biome === 'highway_x') allowedAxes = ['x'];
+        if (biome === 'highway_z') allowedAxes = ['z'];
+        // highway_cross uses default ['x', 'z']
+
         for (let i = 0; i < numCars; i++) {
             const type = getRandomCarType();
             const carGroup = createCarMesh(type);
 
-            const state = this.spawnCarInChunk(carGroup, xOffset, zOffset, chunkSize, chunkCarsList);
+            const state = this.spawnCarInChunk(carGroup, xOffset, zOffset, chunkSize, chunkCarsList, allowedAxes);
 
-            if (state && (Math.abs(state.pos.x - xOffset) > 7 || Math.abs(state.pos.z - zOffset) > 7)) {
-                this.scene.add(carGroup);
+            if (state) {
+                // Check if valid spawn position
+                const isCityIntersection = Math.abs(state.pos.x - xOffset) <= 7 && Math.abs(state.pos.z - zOffset) <= 7;
 
-                // Assign speed
-                const speed = this.getSpeedForType(type);
+                // Highways (any type) allow spawning anywhere (including intersections/crossings)
+                const isHighway = biome.startsWith('highway');
 
-                chunkCarsList.push({
-                    mesh: carGroup,
-                    axis: state.axis,
-                    direction: state.direction,
-                    speed: speed,
-                    type: type,
-                    // Physics State
-                    velocity: new THREE.Vector3(),
-                    angularVelocity: 0,
-                    stunned: 0,
-                    health: 100,
-                    // actually simpler to just wrap within whole chunk 34x34
-                    chunkX: xOffset,
-                    chunkZ: zOffset,
-                    chunkSize: chunkSize,
-                    cx: cx, // Store Indices for migration
-                    cz: cz
-                });
-            } else {
-                // Clean up if spawns in intersection (roughly, though we should really check inside spawnCarInChunk)
-                // Actually spawnCarInChunk returns random pos
+                if (isHighway || !isCityIntersection) {
+                    this.scene.add(carGroup);
+
+                    // Assign speed
+                    const speed = this.getSpeedForType(type);
+
+                    chunkCarsList.push({
+                        mesh: carGroup,
+                        axis: state.axis,
+                        direction: state.direction,
+                        speed: speed,
+                        type: type,
+                        // Physics State
+                        velocity: new THREE.Vector3(),
+                        angularVelocity: 0,
+                        stunned: 0,
+                        health: 100,
+                        chunkX: xOffset,
+                        chunkZ: zOffset,
+                        chunkSize: chunkSize,
+                        cx: cx,
+                        cz: cz
+                    });
+                }
             }
         }
         this.chunkCars.set(`${cx},${cz}`, chunkCarsList);
@@ -101,12 +104,13 @@ export class TrafficSystem {
         }
     }
 
-    spawnCarInChunk(car, chunkX, chunkZ, size, existingCars = []) {
+    spawnCarInChunk(car, chunkX, chunkZ, size, existingCars = [], allowedAxes = ['x', 'z']) {
         const attempts = 10;
         const laneOffset = 3.0;
 
         for (let i = 0; i < attempts; i++) {
-            const axis = Math.random() > 0.5 ? 'x' : 'z';
+            // Pick axis from allowed list
+            const axis = allowedAxes[Math.floor(Math.random() * allowedAxes.length)];
             const direction = Math.random() > 0.5 ? 1 : -1;
             const pos = new THREE.Vector3();
 

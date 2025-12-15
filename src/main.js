@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { initScene, animate } from './scene.js';
-import { createWorld } from './world.js?v=WORLDLOOP_5.13.11';
-import { Player } from './player.js?v=WORLDLOOP_5.13.11';
-import { TrafficSystem } from './traffic.js?v=WORLDLOOP_5.13.11';
-import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.14.0';
-import { PedestrianSystem } from './pedestrians.js?v=WORLDLOOP_5.13.11';
-import { ParkingSystem } from './parking.js?v=WORLDLOOP_5.13.11';
+import { createWorld } from './world.js?v=WORLDLOOP_5.15.2';
+import { Player } from './player.js?v=WORLDLOOP_5.15.2';
+import { TrafficSystem } from './traffic.js?v=WORLDLOOP_5.15.2';
+import { WeatherSystem } from './weather.js?v=WORLDLOOP_5.15.2';
+import { PedestrianSystem } from './pedestrians.js?v=WORLDLOOP_5.15.2';
+import { ParkingSystem } from './parking.js?v=WORLDLOOP_5.15.2';
 import { AirplaneSystem } from './airplanes.js';
 import { EffectSystem } from './effects.js';
 import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
-import { ChunkManager } from './chunk_manager.js?v=WORLDLOOP_5.13.11';
+import { ChunkManager } from './chunk_manager.js?v=WORLDLOOP_5.15.2';
 
 let player;
 let prevTime = performance.now();
@@ -134,7 +134,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v5.14.6 - FREE TRAFFIC';
+        verDiv.innerHTML = 'v5.15.2 - 4-WAY HIGHWAYS';
         document.body.appendChild(verDiv);
 
         animate(() => {
