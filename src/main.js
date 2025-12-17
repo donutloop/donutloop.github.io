@@ -105,24 +105,9 @@ async function init() {
 
         console.log('Game Initialized with Infinite World + Populated Chunks');
 
-        // Weather Controls
-        window.addEventListener('keydown', (e) => {
-            if (weatherSystem) { // Safety check
-                if (e.key === '1') weatherSystem.setSunny();
-                if (e.key === '2') weatherSystem.setRain();
-                if (e.key === '3') weatherSystem.setSnow();
-            }
-        });
 
-        // Instructions for weather
-        const weatherInfo = document.createElement('div');
-        weatherInfo.style.position = 'absolute';
-        weatherInfo.style.top = '20px';
-        weatherInfo.style.right = '20px';
-        weatherInfo.style.color = '#fff';
-        weatherInfo.style.fontFamily = 'monospace';
-        weatherInfo.innerHTML = '[1] Sunny [2] Rain [3] Snow';
-        document.body.appendChild(weatherInfo);
+
+
 
         // Version Display
         const verDiv = document.createElement('div');
@@ -133,7 +118,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v6.1.0: Mega City & Life Update';
+        verDiv.innerHTML = 'v6.2.0: Performance & Weather Update';
         document.body.appendChild(verDiv);
 
         animate(() => {

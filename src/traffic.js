@@ -10,8 +10,16 @@ export class TrafficSystem {
         this.roadWidth = roadWidth;
         this.chunkCars = new Map();
         this.cars = []; // Flat list for easy loop
-        // this.carSpeed = 10; // Removed global speed
-        // No init() call here, wait for ChunkManager
+
+        // Object Pooling
+        this.carPool = {
+            sedan: [],
+            taxi: [],
+            suv: [],
+            truck: [],
+            bus: [],
+            sport: []
+        };
     }
 
     // [NEW] Speed definitions
@@ -25,6 +33,25 @@ export class TrafficSystem {
             case 'bus': return 5; // Very slow
             default: return 8;
         }
+    }
+
+    getCarFromPool(type) {
+        if (this.carPool[type] && this.carPool[type].length > 0) {
+            const car = this.carPool[type].pop();
+            car.visible = true;
+            return car;
+        }
+        return createCarMesh(type);
+    }
+
+    returnCarToPool(carMesh, type) {
+        if (!carMesh) return;
+        // Reset transform? Not strictly needed as spawnCarInChunk overwrites.
+        carMesh.visible = false;
+        this.scene.remove(carMesh); // Detach from scene logic inside unloadChunk handles this too, but good to ensure.
+
+        if (!this.carPool[type]) this.carPool[type] = [];
+        this.carPool[type].push(carMesh);
     }
 
     loadChunk(cx, cz, biome = 'city') {
@@ -43,7 +70,9 @@ export class TrafficSystem {
 
         for (let i = 0; i < numCars; i++) {
             const type = getRandomCarType();
-            const carGroup = createCarMesh(type);
+
+            // USE POOL
+            const carGroup = this.getCarFromPool(type);
 
             // Optimization: Cache local bounding box to avoid per-frame traversal
             // This box is in local space (relative to car origin)
@@ -83,7 +112,13 @@ export class TrafficSystem {
                         cx: cx,
                         cz: cz
                     });
+                } else {
+                    // Spawn failed (invalid spot), return to pool immediately
+                    this.returnCarToPool(carGroup, type);
                 }
+            } else {
+                // Spawn failed (collision?), return to pool
+                this.returnCarToPool(carGroup, type);
             }
         }
         this.chunkCars.set(`${cx},${cz}`, chunkCarsList);
@@ -102,8 +137,10 @@ export class TrafficSystem {
                     // It remains in this.cars so traffic avoids it, which is correct.
                     return;
                 }
-                this.scene.remove(car.mesh);
-                disposeCar(car.mesh); // Dispose resources
+
+                // RETURN TO POOL instead of Dispose
+                this.returnCarToPool(car.mesh, car.type);
+
                 // Remove from flat list
                 const idx = this.cars.indexOf(car);
                 if (idx > -1) this.cars.splice(idx, 1);
