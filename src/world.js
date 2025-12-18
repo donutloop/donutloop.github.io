@@ -71,26 +71,7 @@ function createBuildingMesh(x, z, width, height, depth, style, geoms) {
     addRooftopDetails(x, z, width, height, depth, geoms);
 }
 
-function createProceduralCloudMesh() {
-    // Generate multi-blob cloud geometry
-    const geoms = [];
-    const blobs = 5 + Math.floor(Math.random() * 5);
-    const spread = 20;
 
-    for (let i = 0; i < blobs; i++) {
-        const s = 10 + Math.random() * 15;
-        const x = (Math.random() - 0.5) * spread;
-        const y = (Math.random() - 0.5) * spread * 0.4;
-        const z = (Math.random() - 0.5) * spread * 0.6;
-        geoms.push(box(s, s * 0.6, s * 0.8, x, y, z));
-    }
-
-    if (geoms.length === 0) return null;
-    const merged = BufferGeometryUtils.mergeGeometries(geoms);
-    const mesh = new THREE.Mesh(merged, matCloud);
-    mesh.castShadow = true;
-    return mesh;
-}
 
 function addTreeToGeoms(type, x, z, geoms) {
     // 1. Dirt Patch
@@ -475,16 +456,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         chunkGroup.add(mesh);
     }
 
-    // Clouds (Still separate is fine, they are few)
-    const numClouds = 2;
-    for (let i = 0; i < numClouds; i++) {
-        const c = createProceduralCloudMesh();
-        if (c) {
-            c.userData.isCloud = true;
-            c.position.set(xPos + (Math.random() - 0.5) * size, 600 + Math.random() * 200, zPos + (Math.random() - 0.5) * size);
-            chunkGroup.add(c);
-        }
-    }
+
 
     return { mesh: chunkGroup, colliders: colliders };
 }

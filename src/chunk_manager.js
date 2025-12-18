@@ -52,51 +52,7 @@ export class ChunkManager {
         }
     }
 
-    updateClouds(delta) {
-        // Wrap range (half size of chunk * 1.5)
-        // Keep clouds within their chunk relative space to avoid popping
-        // But since chunks are static, we just wrap them around 0,0 of the chunk group
-        const limit = this.chunkSize / 2;
 
-        for (const [id, chunk] of this.chunks) {
-            if (chunk.mesh) {
-                chunk.mesh.children.forEach(child => {
-                    if (child.userData.isCloud) {
-                        // UNIFIED WIND: All clouds move at the same speed
-                        const windSpeed = 15;
-                        child.position.x += windSpeed * delta;
-
-                        // Wrap
-                        // Note: Clouds are children of chunkGroup.
-                        // chunkGroup is at 0,0,0 relative to parent... WAIT.
-                        // In createCityChunk:
-                        // chunkGroup is returned.
-                        // In loadChunk:
-                        // chunkData.mesh.position is NOT SET? 
-                        // Ah, the OBJECTS inside the chunkGroup are positioned at world xPos/zPos!
-                        // "road.position.set(xPos, 0, zPos);"
-                        // So the chunkGroup itself is at 0,0,0 ??
-                        // Let's check loadChunk.
-                        // "if (chunkData.mesh) this.scene.add(chunkData.mesh);"
-                        // It does not set position.
-                        // So yes, children have WORLD coordinates.
-
-                        // BUT: We want to wrap them relative to the CHUNK CENTER.
-                        // We can calculate chunk center from ID.
-                        const parts = id.split(',');
-                        const cx = parseInt(parts[0]);
-                        // const cz = parseInt(parts[1]); 
-                        const chunkCenterX = cx * this.chunkSize;
-
-                        // Wrap relative to local center
-                        const relX = child.position.x - chunkCenterX;
-                        if (relX > limit) child.position.x -= this.chunkSize;
-                        if (relX < -limit) child.position.x += this.chunkSize;
-                    }
-                });
-            }
-        }
-    }
 
     loadChunk(cx, cz) {
         // Determine Biome

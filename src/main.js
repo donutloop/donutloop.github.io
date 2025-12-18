@@ -118,7 +118,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v6.3.0: Unreachable Celestial Bodies';
+        verDiv.innerHTML = 'v6.4.2: Varied Cloud Sizes';
         document.body.appendChild(verDiv);
 
         animate(() => {
@@ -129,7 +129,7 @@ async function init() {
             try {
                 if (chunkManager) {
                     chunkManager.update();
-                    chunkManager.updateClouds(delta); // [NEW] Animate infinite clouds
+                    chunkManager.update();
                     // Update player colliders continuously as chunks load/unload
                     if (player) {
                         player.colliders = chunkManager.getColliders();

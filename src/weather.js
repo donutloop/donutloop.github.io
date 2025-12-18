@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
 export class WeatherSystem {
     constructor(scene, directionalLight, ambientLight, materials) {
@@ -59,6 +60,170 @@ export class WeatherSystem {
 
         // Apply default based on season immediately
         this.pickWeatherForSeason();
+
+        this.cloudInstances = [];
+        this.initClouds();
+    }
+
+    initClouds() {
+        const cloudCount = 40; // Total clouds
+        const spread = 2000; // Spawn range
+        const cloudTypes = 3;
+
+        // 1. Generate Cloud Archetypes (Geometries)
+        const geoms = [];
+        const matCloud = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.9,
+            transparent: true,
+            opacity: 0.8,
+            flatShading: true
+        });
+
+        // Helper
+        const puff = (radius, x, y, z) => {
+            const g = new THREE.IcosahedronGeometry(radius, 0); // Detail 0 = Low Poly
+            g.translate(x, y, z);
+            return g;
+        };
+
+        for (let t = 0; t < cloudTypes; t++) {
+            let numBlobs, shapeSpread, baseRadius;
+
+            if (t === 0) {
+                // Tiny
+                numBlobs = 3 + Math.floor(Math.random() * 3);
+                shapeSpread = 30;
+                baseRadius = 15;
+            } else if (t === 1) {
+                // Medium
+                numBlobs = 8 + Math.floor(Math.random() * 5);
+                shapeSpread = 70;
+                baseRadius = 30;
+            } else {
+                // Big
+                numBlobs = 15 + Math.floor(Math.random() * 10);
+                shapeSpread = 140;
+                baseRadius = 40;
+            }
+
+            const blobGeoms = [];
+
+            for (let i = 0; i < numBlobs; i++) {
+                const s = baseRadius + Math.random() * baseRadius;
+                const x = (Math.random() - 0.5) * shapeSpread;
+                const y = (Math.random() - 0.5) * shapeSpread * 0.4;
+                const z = (Math.random() - 0.5) * shapeSpread * 0.6;
+                blobGeoms.push(puff(s, x, y, z));
+            }
+            if (blobGeoms.length > 0) {
+                geoms.push(BufferGeometryUtils.mergeGeometries(blobGeoms));
+            } else {
+                geoms.push(new THREE.BoxGeometry(1, 1, 1)); // Fallback
+            }
+        }
+
+        // 2. Create InstancedMesh for each type
+        // Distribute count among types
+        const countPerType = Math.ceil(cloudCount / cloudTypes);
+
+        this.cloudMeshes = [];
+        const occupiedPositions = []; // {x, z, r}
+
+        for (let t = 0; t < cloudTypes; t++) {
+            const mesh = new THREE.InstancedMesh(geoms[t], matCloud, countPerType);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true; // Clouds self-shadow slightly?
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+            const dummy = new THREE.Object3D();
+
+            for (let i = 0; i < countPerType; i++) {
+                // Find non-overlapping position
+                let cx, cz, valid = false;
+                let attempts = 0;
+                while (!valid && attempts < 50) {
+                    cx = (Math.random() - 0.5) * spread;
+                    cz = (Math.random() - 0.5) * spread;
+
+                    // Check overlap
+                    valid = true;
+                    for (const pos of occupiedPositions) {
+                        const dist = Math.sqrt((cx - pos.x) ** 2 + (cz - pos.z) ** 2);
+                        if (dist < 150) { // Min distance between cloud centers
+                            valid = false;
+                            break;
+                        }
+                    }
+                    attempts++;
+                }
+
+                occupiedPositions.push({ x: cx, z: cz });
+
+                const cy = 400 + Math.random() * 150;
+
+                dummy.position.set(cx, cy, cz);
+                dummy.rotation.y = Math.random() * Math.PI * 2;
+                dummy.scale.setScalar(1.0 + Math.random() * 0.5); // Variation
+                dummy.updateMatrix();
+
+                mesh.setMatrixAt(i, dummy.matrix);
+            }
+
+            mesh.instanceMatrix.needsUpdate = true;
+            this.scene.add(mesh);
+            this.cloudMeshes.push({
+                mesh: mesh,
+                count: countPerType,
+                dummy: dummy // reuse dummy
+            });
+        }
+    }
+
+    updateClouds(delta, playerPos) {
+        if (!this.cloudMeshes) return;
+
+        const windX = 15 * delta; // Constant wind speed
+        const range = 1000; // Half-size of scroll area (2000 total)
+
+        for (const group of this.cloudMeshes) {
+            const mesh = group.mesh;
+            const dummy = group.dummy;
+            let dirty = false;
+
+            for (let i = 0; i < group.count; i++) {
+                mesh.getMatrixAt(i, dummy.matrix);
+                dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
+
+                // Move
+                dummy.position.x += windX;
+
+                // Wrap relative to player
+                // We want clouds to be in [player.x - range, player.x + range]
+                let dx = dummy.position.x - playerPos.x;
+                let dz = dummy.position.z - playerPos.z;
+
+                let wrapped = false;
+
+                if (dx > range) { dummy.position.x -= range * 2; wrapped = true; }
+                if (dx < -range) { dummy.position.x += range * 2; wrapped = true; }
+                if (dz > range) { dummy.position.z -= range * 2; wrapped = true; }
+                if (dz < -range) { dummy.position.z += range * 2; wrapped = true; }
+
+                if (wrapped) {
+                    // Randomize height again on wrap to avoid patterns? 
+                    // Or keep it simple. Let's keep Y.
+                    // But re-check overlap? No, too expensive for update loop.
+                    // Just wrap. Overlap might happen at edges but it's rare.
+                }
+
+                dummy.updateMatrix();
+                mesh.setMatrixAt(i, dummy.matrix);
+                dirty = true;
+            }
+
+            if (dirty) mesh.instanceMatrix.needsUpdate = true;
+        }
     }
 
     initParticles() {
@@ -205,6 +370,8 @@ export class WeatherSystem {
 
         // Particles
         this.updateParticles(delta, playerPos);
+
+        this.updateClouds(delta, playerPos);
 
         this.updateWeatherAutomation(delta * hoursPerSec);
     }
