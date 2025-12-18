@@ -1,13 +1,18 @@
-# Worldloop v5.14.10
+# Worldloop v6.4.2
 
-![City View](assets/city_street_view_1765795068685.png)
+![Cloud Showcase](assets/cloud_showcase.png)
 
 **Worldloop** is a next-gen procedural city simulation featuring intelligent traffic, smart pedestrians, and diverse architectural styles.
 
 ## 🌟 Features
-*   **Procedural City:** Infinite city generation with long boulevards and varied districts.
+*   **Procedural City:** Infinite city generation with long boulevards and varied districts including Wasteland Highways.
 *   **Intelligent Traffic:** Cars obey traffic lights, stop for obstacles, and drive realistically.
+*   **Street Parking:** Dynamic street parking system where cars park along the curb.
 *   **Smart Pedestrians:** Pedestrians walk the streets, avoid buildings, and use crosswalks safely.
+*   **Realistic Atmosphere:**
+    *   **Volumetric-style Clouds:** Varied sizes (Tiny, Medium, Big) with organic shapes.
+    *   **Infinite Sky:** Clouds wrap around the player for a seamless experience.
+    *   **Unreachable Horizon:** Distant sun and moon for a massive sense of scale.
 *   **5 Building Styles:**
     *   Classic Setback
     *   Modern Glass (Lit Windows)
