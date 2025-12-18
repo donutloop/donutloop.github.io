@@ -7,3 +7,4 @@
 *   [5. Sync Start Date with Real World](0005-sync-start-date-with-real-world.md)
 *   [6. Geometry Merging](0006-geometry-merging.md)
 *   [7. Object Pooling](0007-object-pooling.md)
+*   [8. Unreachable Celestial Bodies](0008-unreachable-celestial-bodies.md)

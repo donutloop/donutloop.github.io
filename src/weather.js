@@ -96,13 +96,14 @@ export class WeatherSystem {
 
     initSky() {
         // Sun
-        const sunGeom = new THREE.SphereGeometry(80, 32, 32);
+        // Increased size for distance (was 80)
+        const sunGeom = new THREE.SphereGeometry(1000, 32, 32);
         const sunMat = new THREE.MeshBasicMaterial({
             color: 0xffdd44,
             fog: false
         });
         this.sun = new THREE.Mesh(sunGeom, sunMat);
-        this.sun.position.set(50, 500, 50);
+        this.sun.position.set(500, 5000, 500);
         this.scene.add(this.sun);
     }
 
@@ -292,7 +293,7 @@ export class WeatherSystem {
         if (t >= 6 && t < 18) sunAngle = ((t - 6) / 12) * Math.PI;
         else sunAngle = ((t - 6) / 24) * Math.PI * 2;
 
-        const radius = 800;
+        const radius = 10000;
         const sunRelX = Math.cos(sunAngle) * radius;
         const sunRelY = Math.sin(sunAngle) * radius;
 
