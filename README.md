@@ -1,6 +1,6 @@
 # Worldloop v6.4.2
 
-![City View](assets/header_city.png)
+![Cloud Showcase](assets/cloud_showcase.png)
 
 **Worldloop** is a next-gen procedural city simulation featuring intelligent traffic, smart pedestrians, and diverse architectural styles.
 
@@ -31,16 +31,12 @@
 ## 📸 Gallery
 
 ### Diverse Architecture
-![New Buildings](assets/feature_architecture.png)
+![New Buildings](assets/new_buildings_1765795082976.png)
 *From left to right: Cyberpunk Neon Tower, Brick Apartment, and Modern Glass Skyscrapers.*
 
 ### Living Streets
-![Pedestrians](assets/feature_pedestrians.png)
+![Pedestrians](assets/pedestrians_1765795096720.png)
 *Pedestrians navigating the sidewalks and crossing streets safely.*
-
-### Atmosphere
-![Cloud Showcase](assets/cloud_showcase.png)
-*Volumetric clouds and distant celestial bodies.*
 
 ---
 *Created by Worldloop Team*
