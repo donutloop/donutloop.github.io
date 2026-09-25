@@ -10,6 +10,7 @@ import { AirplaneSystem } from './airplanes.js';
 import { EffectSystem } from './effects.js';
 import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
 import { ChunkManager } from './chunk_manager.js';
+import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget telemetry
 
 let player;
 let prevTime = performance.now();
@@ -24,6 +25,7 @@ let airplaneSystem;
 let effectSystem;
 let trafficLightSystem; // [NEW]
 let chunkManager;
+let telemetry; // [NEW]
 
 function initScore() {
     scoreElement = document.createElement('div');
@@ -103,11 +105,29 @@ async function init() {
         airplaneSystem = new AirplaneSystem(scene, worldData.citySize);
         window.airplaneSystem = airplaneSystem; // Debug: Expose to console
 
+        // [NEW] Frame-budget telemetry (real FPS + draw calls from the renderer)
+        telemetry = new FrameBudgetTelemetry();
+        window.frameBudget = telemetry; // Machine-readable on the browser path too
+
         console.log('Game Initialized with Infinite World + Populated Chunks');
 
 
 
 
+
+        // [NEW] Telemetry HUD (fps + draw calls, updated once per second)
+        const teleDiv = document.createElement('div');
+        teleDiv.style.position = 'absolute';
+        teleDiv.style.bottom = '34px';
+        teleDiv.style.right = '10px';
+        teleDiv.style.color = '#8affaa';
+        teleDiv.style.background = 'rgba(0,0,0,0.5)';
+        teleDiv.style.padding = '5px';
+        teleDiv.style.fontFamily = 'monospace';
+        teleDiv.style.fontSize = '12px';
+        teleDiv.innerHTML = 'fps -- | dc --';
+        document.body.appendChild(teleDiv);
+        let teleTicker = 0;
 
         // Version Display
         const verDiv = document.createElement('div');
@@ -149,6 +169,15 @@ async function init() {
                 if (effectSystem) effectSystem.update(delta);
 
                 renderer.render(scene, camera);
+
+                // [NEW] record real frame budget each frame
+                telemetry.recordFrame(delta, renderer.info.render.calls, renderer.info.render.triangles);
+                teleTicker += delta;
+                if (teleTicker >= 0.5 && teleDiv) {
+                    teleTicker = 0;
+                    const s = telemetry.snapshot();
+                    teleDiv.innerHTML = 'fps ' + s.fps + ' | dc ' + s.drawCalls;
+                }
             } catch (err) {
                 console.error("Game Loop Error:", err);
             }

@@ -10,3 +10,6 @@
 *   [8. Unreachable Celestial Bodies](0008-unreachable-celestial-bodies.md)
 *   [9. Cloud Visual Improvements](0009-cloud-visual-improvements.md)
 *   [10. Crosswalk Timing Integration](0010-crosswalk-yield.md)
+*   [11. Instanced Buildings](0011-instanced-buildings.md)
+*   [12. Render-Distance LOD](0012-render-distance-lod.md)
+*   [13. Frame-Budget Telemetry](0013-frame-budget-telemetry.md)

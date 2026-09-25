@@ -23,6 +23,7 @@ import { ChunkManager } from './src/chunk_manager.js';
 import { Player } from './src/player.js';
 import { deformMesh } from './src/deformation.js';
 import { SimplexNoise } from './src/noise.js';
+import { FrameBudgetTelemetry } from './src/telemetry.js';
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
@@ -193,6 +194,23 @@ const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSyste
   'ChunkManager', 'Player'].every(sym => mainSrc.includes(sym));
 check('main.js wires all systems', wired, 'symbols checked');
 check('main.js passes pedestrianSystem to traffic.setDependencies', mainSrc.includes('pedestrianSystem)'), '5th dep wired');
+check('main.js wires FrameBudgetTelemetry', mainSrc.includes('FrameBudgetTelemetry') && mainSrc.includes('recordFrame'), 'telemetry wired');
+
+// ---- 14. Frame-budget telemetry (Phase 1 / Gap B next) ------------------------
+const telemetry = new FrameBudgetTelemetry();
+const { drawCalls, instances } = telemetry.countDrawCalls(scene);
+check('telemetry.countDrawCalls -> at least one renderable mesh', drawCalls >= 1, 'drawCalls=' + drawCalls + ' instances=' + instances);
+const teleStep = (dt) => {
+  traffic.update(dt);
+  trafficLights.update(dt);
+  weather.update(dt);
+  pedestrians.update(dt);
+  airplanes.update(dt);
+  effects.update(dt);
+};
+const frameBudget = telemetry.measureFrameBudget(teleStep, 1 / 60, 120);
+check('telemetry.measureFrameBudget -> achievable FPS > 0', frameBudget.fps > 0, 'fps=' + frameBudget.fps.toFixed(2) + ' frameMs=' + frameBudget.avgFrameMs.toFixed(3));
+check('telemetry.measureFrameBudget -> 120-frame loop completes', frameBudget.frames === 120, 'frames=' + frameBudget.frames);
 
 // ---- Emit machine-readable JSON ------------------------------------------------
 const report = {
@@ -210,7 +228,14 @@ const report = {
     chunk_manager: { exports: ['ChunkManager'] },
     player: { exports: ['Player'] },
     deformation: { exports: ['deformMesh'] },
-    noise: { exports: ['SimplexNoise'] }
+    noise: { exports: ['SimplexNoise'] },
+    telemetry: { exports: ['FrameBudgetTelemetry'] }
+  },
+  telemetry: {
+    fps: +frameBudget.fps.toFixed(2),
+    frameMs: +frameBudget.avgFrameMs.toFixed(3),
+    drawCalls,
+    instances
   },
   checks,
   summary: { passed: checks.length - failed, failed, total: checks.length },

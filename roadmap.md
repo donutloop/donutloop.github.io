@@ -52,8 +52,11 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   low-poly instanced silhouettes (coarse concrete boxes, no foliage/lights,
   no population); near chunks keep full detail. ChunkManager upgrades/downgrades
   a chunk when it crosses `lodDistance` (ADR 0012).
-- **⏳ PLANNED** Frame-budget telemetry in `check_world.mjs` (report FPS and
-  draw-call count as machine-readable output).
+- **✅ DONE (Round 5 / ADR 0013)** Frame-budget telemetry — shared
+  `src/telemetry.js` reports FPS + draw-call count as machine-readable JSON in
+  `check_world.mjs` (scene-graph draw calls + synthetic achievable FPS), and the
+  browser path records real `renderer.info` per frame, exposes `window.frameBudget`,
+  and shows a `fps N | dc N` HUD line.
 
 ## Phase 2 — city-simulation depth
 
