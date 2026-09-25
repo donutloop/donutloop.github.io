@@ -86,6 +86,12 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   streamed chunks + current district name, so the player can navigate.
 - **⏳ PLANNED** Weather-reactive driving (snow/rain reduce friction; expose as
   a `weather` field in `check_world.mjs` output).
+- **⏳ PLANNED** Dynamic city events — emergency response & sirens. Spawn
+  ambulance / fire / police vehicles on crash incidents (hook the existing
+  `deformation.js` crash path), add a pooled EMS class to `traffic.js` with
+  siren + rotating-light effects via `effects.js`, and lane-clearing priority
+  so ordinary cars yield ahead. Expose an `events` counter in `check_world.mjs`
+  so the agent loop can verify incident → response coverage.
 
 ## Phase 5 — tooling / agentic
 
@@ -103,6 +109,14 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   data structure (`src/road_graph.js`) so `check_world.mjs` can assert
   connectivity without a browser.
 - **Gap C — crosswalk timing**: small, self-contained; good first cycle.
+- **Gap D — emergency events**: gameplay-depth win built on the already-done
+  crash/deformation + pooled-traffic systems; needs an EMS vehicle type, an
+  `events` telemetry field, and a siren/light effect stage.
+- **Discrepancy**: `check_world.mjs` is currently a 149-line duplicate of the
+  `world.js` body (even references `THREE` without importing it), NOT the
+  structured/machine-readable verification `AGENTS.md` and this roadmap describe.
+  Rebuild it as a real check harness (assert systems + emit JSON) before relying
+  on it for the agent loop.
 - Every feature must keep both paths green: browser render + `check_world.mjs`.
 
 ## Definition of done
