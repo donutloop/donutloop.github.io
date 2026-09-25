@@ -1,6 +1,6 @@
 {
   "round": 4,
-  "lastCommit": "PENDING",
+  "lastCommit": "2b69156",
   "finishedAt": null,
   "lastFeature": "Gap B — render-distance LOD: far city chunks build low-poly instanced silhouettes (coarse concrete boxes, no foliage/lights/population); ChunkManager rebuilds a chunk when it crosses lodDistance (ADR 0012)"
 }
