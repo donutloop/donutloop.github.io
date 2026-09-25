@@ -88,6 +88,9 @@ check('world.materials cache (road/sidewalk/building)',
   'materials=' + Object.keys(world.materials).join(','));
 const cityChunk = createCityChunk(0, 0, world.blockSize);
 const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
+  const instMeshes = cityChunk.mesh.children.filter(c => c.isInstancedMesh);
+  check('world.createCityChunk -> buildings use InstancedMesh', instMeshes.length > 0, instMeshes.length + ' instanced meshes');
+  check('instanced building meshes share the 1x1x1 unit-box geometry', instMeshes.every(m => m.geometry.type === 'BoxGeometry' && m.geometry.parameters.width === 1 && m.geometry.parameters.height === 1 && m.geometry.parameters.depth === 1), 'shared unit-box');
 check('world.createCityChunk -> {mesh,colliders}', cityChunk.mesh instanceof THREE.Group && Array.isArray(cityChunk.colliders));
 check('world.createWastelandChunk -> {mesh,colliders}', wasteChunk.mesh instanceof THREE.Group && Array.isArray(wasteChunk.colliders));
 

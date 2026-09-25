@@ -44,9 +44,10 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 
 - Geometry merging for buildings/road tiles ✅ DONE (ADR 0006)
 - Object pooling for cars/pedestrians ✅ DONE (ADR 0007)
-- **⏳ PLANNED** Instanced buildings — replace per-building meshes with
-  `InstancedMesh` per district style to cut draw calls (clouds already use
-  instancing; apply the same pattern to buildings).
+- **✅ DONE (Round 3 / Gap A)** Instanced buildings — buildings are authored
+  once as a shared `1x1x1` unit `BoxGeometry` and drawn as one `InstancedMesh`
+  per material (ADR 0011); per-instance matrices replace duplicated merged
+  vertex buffers.
 - **⏳ PLANNED** Render-distance LOD — far chunks swap to low-poly/instanced
   silhouettes; near chunks keep detail.
 - **⏳ PLANNED** Frame-budget telemetry in `check_world.mjs` (report FPS and
@@ -103,8 +104,10 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 
 ## Gaps & notes (for the next cycle)
 
-- **Gap A — instanced buildings**: biggest draw-call win; reuse the
-  `weather.js` instancing pattern. Land before LOD so LOD has a baseline.
+- **Gap A — instanced buildings** ✅ RESOLVED (ADR 0011): building geometry
+  is authored once (shared unit `BoxGeometry`) and rendered as per-material
+  `InstancedMesh`, cutting retained vertex/memory cost before LOD work.
+  Next: **Gap B — instanced-building LOD**.
 - **Gap B — road-network graph**: needed for realistic traffic; keep it a pure
   data structure (`src/road_graph.js`) so `check_world.mjs` can assert
   connectivity without a browser.

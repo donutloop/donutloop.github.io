@@ -9,6 +9,46 @@ function box(w, h, d, x, y, z) {
     return g;
 }
 
+// --- INSTANCED BUILDINGS ---
+// Shared unit-box geometry: every building box becomes an instance of this
+// 1x1x1 box (one InstancedMesh per material) instead of a merged geometry.
+const buildingUnitBox = new THREE.BoxGeometry(1, 1, 1);
+
+// Build one InstancedMesh per material from building boxes. Each element is a
+// translated THREE.BoxGeometry (legacy box() builders) or an {pos, scale} record
+// (instBox) — both are normalized to instance matrices against the unit box.
+function addBuildingInsts(group, insts, mat) {
+  const records = [];
+  for (const el of insts) {
+    if (el && el.pos) {
+      records.push(el);
+    } else if (el && el.type === 'BoxGeometry') {
+      el.computeBoundingBox();
+      const bb = el.boundingBox;
+      records.push({
+        pos: [(bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2],
+        scale: [el.parameters.width, el.parameters.height, el.parameters.depth],
+      });
+    }
+  }
+  if (records.length === 0) return;
+  const mesh = new THREE.InstancedMesh(buildingUnitBox, mat, records.length);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < records.length; i++) {
+    const it = records[i];
+    dummy.position.set(it.pos[0], it.pos[1], it.pos[2]);
+    dummy.scale.set(it.scale[0], it.scale[1], it.scale[2]);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(i, dummy.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  group.add(mesh);
+}
+
+
 // --- MATERIALS ---
 
 // High Quality PBR Materials
@@ -425,14 +465,14 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         }
     };
 
-    addClean(chunkGeoms.concrete, matConcrete);
-    addClean(chunkGeoms.concreteDark, matConcreteDark);
-    addClean(chunkGeoms.concreteLight, matConcreteLight);
-    addClean(chunkGeoms.brick, matBrick);
-    addClean(chunkGeoms.glass, matGlassModern); // Using Modern for all glass in merge (Simplify)
-    addClean(chunkGeoms.metal, matMetal);
-    addClean(chunkGeoms.darkMetal, matDarkMetal);
-    addClean(chunkGeoms.neon, matNeonCyan); // Simplify to one neon color for Batch? 
+    addBuildingInsts(chunkGroup, chunkGeoms.concrete, matConcrete);
+    addBuildingInsts(chunkGroup, chunkGeoms.concreteDark, matConcreteDark);
+    addBuildingInsts(chunkGroup, chunkGeoms.concreteLight, matConcreteLight);
+    addBuildingInsts(chunkGroup, chunkGeoms.brick, matBrick);
+    addBuildingInsts(chunkGroup, chunkGeoms.glass, matGlassModern); // Using Modern for all glass in merge (Simplify)
+    addBuildingInsts(chunkGroup, chunkGeoms.metal, matMetal);
+    addBuildingInsts(chunkGroup, chunkGeoms.darkMetal, matDarkMetal);
+    addBuildingInsts(chunkGroup, chunkGeoms.neon, matNeonCyan); // Simplify to one neon color for Batch? 
     // Or split neon arrays. For now, one color is fine for performance.
 
     addClean(chunkGeoms.trunkBrown, matTrunkBrown);
