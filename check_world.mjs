@@ -100,6 +100,28 @@ traffic.update(0.1);
 check('traffic.update(0.1) runs', true, 'ok');
 check('traffic exposes pooled car map + flat list', traffic.chunkCars instanceof Map && Array.isArray(traffic.cars));
 
+// ---- 2b. Crosswalk timing (Gap C) — cars yield to a pedestrian in lane path ----
+const yieldCar = {
+  mesh: { position: new THREE.Vector3(0, 0, 0) },
+  axis: 'x', direction: 1
+};
+const pedAhead = { mesh: { position: new THREE.Vector3(6, 0, 0) } };   // 6m ahead, lateral 0
+const pedBehind = { mesh: { position: new THREE.Vector3(-6, 0, 0) } }; // behind car
+const pedSide = { mesh: { position: new THREE.Vector3(0, 0, 9) } };    // lateral 9 > laneWidth
+
+traffic.pedestrianSystem = { peds: [pedAhead] };
+check('traffic.pedestrianNearCrosswalk true when ped ahead in lane', traffic.pedestrianNearCrosswalk(yieldCar) === true, 'forward=6 lateral=0');
+traffic.pedestrianSystem = { peds: [pedBehind] };
+check('traffic.pedestrianNearCrosswalk false when ped behind', traffic.pedestrianNearCrosswalk(yieldCar) === false, 'forward=-6');
+traffic.pedestrianSystem = { peds: [pedSide] };
+check('traffic.pedestrianNearCrosswalk false when ped off-lane', traffic.pedestrianNearCrosswalk(yieldCar) === false, 'lateral=9');
+traffic.pedestrianSystem = null;
+check('traffic.pedestrianNearCrosswalk false when no ped system', traffic.pedestrianNearCrosswalk(yieldCar) === false, 'no peds');
+
+traffic.pedestrianSystem = { peds: [pedAhead] };
+check('traffic.checkBlocked yields for crossing pedestrian', traffic.checkBlocked(yieldCar, []) === true, 'yield on crosswalk');
+traffic.pedestrianSystem = null;
+
 // ---- 3. Weather / seasons --------------------------------------------------
 check('weather.currentWeather in allowed set', ['sunny', 'rain', 'snow'].includes(weather.currentWeather),
   'current=' + weather.currentWeather);
@@ -158,6 +180,7 @@ const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSyste
   'WeatherSystem', 'AirplaneSystem', 'EffectSystem', 'TrafficLightSystem',
   'ChunkManager', 'Player'].every(sym => mainSrc.includes(sym));
 check('main.js wires all systems', wired, 'symbols checked');
+check('main.js passes pedestrianSystem to traffic.setDependencies', mainSrc.includes('pedestrianSystem)'), '5th dep wired');
 
 // ---- Emit machine-readable JSON ------------------------------------------------
 const report = {

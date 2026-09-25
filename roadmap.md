@@ -60,8 +60,8 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - **⏳ PLANNED** Road-network graph — build an implicit directed graph from the
   chunk grid so cars can follow realistic routes instead of pure lane-following;
   expose it to `check_world.mjs` so the agent can verify connectivity.
-- **⏳ PLANNED** Crosswalk timing integration — pedestrians and traffic lights
-  share one clock so cars yield at crosswalks with a pedestrian present.
+- Crosswalk timing integration — pedestrians and traffic lights share one clock so
+  cars yield at crosswalks with a pedestrian present. ✅ DONE (ADR 0010)
 
 ## Phase 3 — atmosphere / visual quality
 
@@ -108,7 +108,8 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - **Gap B — road-network graph**: needed for realistic traffic; keep it a pure
   data structure (`src/road_graph.js`) so `check_world.mjs` can assert
   connectivity without a browser.
-- **Gap C — crosswalk timing**: small, self-contained; good first cycle.
+- **Gap C — crosswalk timing** ✅ resolved (ADR 0010): small, self-contained;
+  done as Round 2 — cars yield at crosswalks via `pedestrianNearCrosswalk`.
 - **Gap D — emergency events**: gameplay-depth win built on the already-done
   crash/deformation + pooled-traffic systems; needs an EMS vehicle type, an
   `events` telemetry field, and a siren/light effect stage.

@@ -92,7 +92,7 @@ async function init() {
         player.pedestrianSystem = pedestrianSystem;
 
         // Dependency Injection
-        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem);
+        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem);
         parkingSystem.setDependencies(effectSystem);
         pedestrianSystem.setDependencies(trafficLightSystem, parkingSystem, effectSystem);
 

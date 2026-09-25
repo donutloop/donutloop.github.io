@@ -200,11 +200,45 @@ export class TrafficSystem {
         return null;
     }
 
-    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem) {
+    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem) {
         this.player = player;
         this.parkingSystem = parkingSystem;
         this.trafficLightSystem = trafficLightSystem;
         this.effectSystem = effectSystem;
+        this.pedestrianSystem = pedestrianSystem;
+    }
+
+    // [Gap C] Crosswalk timing — cars yield to a pedestrian present at / crossing
+    // the crosswalk ahead, even when the car's light is green. Pedestrians and
+    // traffic lights already share one clock (peds cross on red); this makes cars
+    // yield to an actively crossing / waiting pedestrian in their lane path.
+    pedestrianNearCrosswalk(car) {
+        if (!this.pedestrianSystem || !car) return false;
+        const checkDist = 14.0; // Yield zone ahead of the car
+        const laneWidth = 3.5;   // Lateral leeway (crosswalk zone is wider than car)
+        const carPos = car.mesh.position;
+        const peds = this.pedestrianSystem.peds || [];
+
+        for (const ped of peds) {
+            const p = ped.mesh.position;
+            let forwardDist = 0;
+            let lateralDist = 0;
+
+            if (car.axis === 'x') {
+                lateralDist = Math.abs(p.z - carPos.z);
+                const dx = p.x - carPos.x;
+                forwardDist = car.direction === 1 ? dx : -dx;
+            } else {
+                lateralDist = Math.abs(p.x - carPos.x);
+                const dz = p.z - carPos.z;
+                forwardDist = car.direction === 1 ? dz : -dz;
+            }
+
+            if (forwardDist > 0 && forwardDist < checkDist && lateralDist < laneWidth) {
+                return true;
+            }
+        }
+        return false;
     }
 
     update(delta) {
@@ -310,6 +344,9 @@ export class TrafficSystem {
     }
 
     checkBlocked(car, externalObstacles) {
+        // 0. Crosswalk timing (Gap C) — yield to a pedestrian in the lane path
+        if (this.pedestrianNearCrosswalk(car)) return true;
+
         // 1. Check Traffic Light (New)
         if (this.trafficLightSystem) {
             // Are we near an intersection?
