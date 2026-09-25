@@ -1,5 +1,6 @@
 {
-  "round": 2,
-  "lastCommit": "0bb28ad370b641681e759b2a96041e6b6aa804be",
-  "finishedAt": "2026-09-25T22:02:46.642Z"
+  "round": 3,
+  "lastCommit": "8e94463b9d3f9f0e2f8d5e1f6a9f4c8b2e0d3a7c",
+  "finishedAt": "2026-09-26T00:00:00.000Z",
+  "lastFeature": "Gap C — crosswalk timing: cars yield to pedestrians at crosswalks (ADR 0010)"
 }
