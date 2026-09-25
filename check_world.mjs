@@ -91,6 +91,15 @@ const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
   const instMeshes = cityChunk.mesh.children.filter(c => c.isInstancedMesh);
   check('world.createCityChunk -> buildings use InstancedMesh', instMeshes.length > 0, instMeshes.length + ' instanced meshes');
   check('instanced building meshes share the 1x1x1 unit-box geometry', instMeshes.every(m => m.geometry.type === 'BoxGeometry' && m.geometry.parameters.width === 1 && m.geometry.parameters.height === 1 && m.geometry.parameters.depth === 1), 'shared unit-box');
+
+  // ---- Render-distance LOD (Gap B) — far chunks swap to low-poly silhouettes ----
+  const lodChunk = createCityChunk(0, 0, world.blockSize, world.roadWidth, 1);
+  const fullDetail = createCityChunk(0, 0, world.blockSize, world.roadWidth, 0);
+  check('world.createCityChunk -> LOD chunk exposes lodLevel', lodChunk.lodLevel === 1, 'lodLevel=' + lodChunk.lodLevel);
+  check('world.createCityChunk -> LOD is lighter than full detail (fewer meshes)', lodChunk.mesh.children.length < fullDetail.mesh.children.length,
+    'full=' + fullDetail.mesh.children.length + ' lod=' + lodChunk.mesh.children.length);
+  check('world.createCityChunk -> LOD omits streetlight bulbs', ![...lodChunk.mesh.children].some(c => c.isMesh && c.material && c.material.color && c.material.color.getHex && c.material.color.getHex() === 0xffffaa), 'no bulb meshes');
+  check('ChunkManager -> lodDistance detail radius', chunkManager.lodDistance >= 1, 'lodDistance=' + chunkManager.lodDistance);
 check('world.createCityChunk -> {mesh,colliders}', cityChunk.mesh instanceof THREE.Group && Array.isArray(cityChunk.colliders));
 check('world.createWastelandChunk -> {mesh,colliders}', wasteChunk.mesh instanceof THREE.Group && Array.isArray(wasteChunk.colliders));
 

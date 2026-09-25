@@ -1,6 +1,6 @@
 {
-  "round": 3,
+  "round": 4,
   "lastCommit": "PENDING",
   "finishedAt": null,
-  "lastFeature": "Gap A — instanced buildings: building geometry authored once as a shared 1x1x1 unit BoxGeometry, rendered as one InstancedMesh per material (ADR 0011)"
+  "lastFeature": "Gap B — render-distance LOD: far city chunks build low-poly instanced silhouettes (coarse concrete boxes, no foliage/lights/population); ChunkManager rebuilds a chunk when it crosses lodDistance (ADR 0012)"
 }

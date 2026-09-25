@@ -314,9 +314,11 @@ function addRooftopDetails(x, z, w, h, d, geoms) {
 
 // --- WORLD GENERATION ---
 
-export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
+export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) {
     const chunkGroup = new THREE.Group();
     const colliders = [];
+    const bulbGeoms = []; // streetlight bulbs — function scope so LOD merge can skip empty arrays
+    const isLOD = lodLevel > 0; // far chunks: low-poly instanced silhouettes, no foliage/lights
 
     // Accumulate Geometries for Batch Merging
     const chunkGeoms = {
@@ -368,8 +370,19 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         // Sidewalk
         chunkGeoms.sidewalk.push(box(cornerSize, 0.2, cornerSize, cx, 0.1, cz));
 
-        // Building
-        if (Math.random() > 0.1) {
+        // Building — LOD: single coarse concrete silhouette; full: styled detail
+        if (isLOD) {
+            const margin = 12;
+            const bw = cornerSize - margin;
+            if (bw > 8) {
+                const bh = 20 + Math.random() * 40;
+                chunkGeoms.concrete.push(box(bw, bh, bw, cx, bh / 2, cz));
+                const box3 = new THREE.Box3();
+                box3.min.set(cx - bw / 2, 0, cz - bw / 2);
+                box3.max.set(cx + bw / 2, bh, cz + bw / 2);
+                colliders.push(box3);
+            }
+        } else if (Math.random() > 0.1) {
             const margin = 12;
             const bw = cornerSize - margin;
 
@@ -397,6 +410,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         }
     });
 
+    if (!isLOD) {
     // Veg
     corners.forEach(Corner => {
         const cx = xPos + Corner.x;
@@ -427,7 +441,9 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
             }
         }
     });
+    }
 
+    if (!isLOD) {
     // Streetlights
     const lightOffset = roadWidth / 2 + 1;
     const poles = [
@@ -436,8 +452,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         { x: -lightOffset, z: lightOffset, r: 3 * Math.PI / 4 },
         { x: lightOffset, z: -lightOffset, r: -Math.PI / 4 },
     ];
-    const bulbGeoms = []; // separate accumulator for bulbs only? No, can use chunkGeoms.neon or new one
-    // Let's reuse 'neon' for bulb? Or standard 'light'? 
+    // bulb accumulator lives at function scope so the merge step can read it for both detail levels
     // chunkGeoms doesn't have 'light'. Let's add 'light'.
     // Or just make it a separate mesh since it's small.
     // Let's add to chunkGeoms.
@@ -452,6 +467,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
         // Let's just return a mesh for bulbs, it's 4 per chunk.
         bulbGeoms.push(box(0.5, 0.2, 0.5, xPos + p.x + Math.sin(p.r) * 1.5, 7.4, zPos + p.z + Math.cos(p.r) * 1.5));
     });
+    }
 
     // --- BATCH MERGE AND ADD TO SCENE ---
 
@@ -498,7 +514,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24) {
 
 
 
-    return { mesh: chunkGroup, colliders: colliders };
+    return { mesh: chunkGroup, colliders: colliders, lodLevel: lodLevel };
 }
 
 

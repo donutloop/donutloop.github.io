@@ -15,6 +15,7 @@ export class ChunkManager {
         this.chunks = new Map(); // "x,z" -> chunkData
         this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
         this.renderDistance = 3; // chunks radius (Reduced for performance)
+        this.lodDistance = 1; // chunks radius inside which full detail; farther city chunks use low-poly LOD
 
         // Seed randomness
         this.noise = SimplexNoise;
@@ -41,6 +42,21 @@ export class ChunkManager {
                     this.loadChunk(cx, cz);
                     return; // Throttle: Load only 1 chunk per frame
                 }
+            }
+        }
+
+        // LOD transitions — rebuild city chunks that crossed the detail boundary
+        for (const [id, chunk] of this.chunks) {
+            if (chunk.lodLevel === undefined) continue; // highway/wasteland have no LOD
+            const parts = id.split(',');
+            const cx = parseInt(parts[0], 10);
+            const cz = parseInt(parts[1], 10);
+            const d = Math.sqrt(cx * cx + cz * cz);
+            const required = d > this.lodDistance ? 1 : 0;
+            if (chunk.lodLevel !== required) {
+                this.unloadChunk(id);
+                this.loadChunk(cx, cz);
+                return; // Throttle: only 1 LOD rebuild per frame
             }
         }
 
@@ -81,12 +97,16 @@ export class ChunkManager {
         let chunkData;
 
         if (isCity) {
-            chunkData = createCityChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth);
-            // Spawn Population (Full)
-            if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
-            if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
-            if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
-            if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
+            const lodLevel = dist > this.lodDistance ? 1 : 0;
+            chunkData = createCityChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth, lodLevel);
+            chunkData.lodLevel = lodLevel;
+            // Spawn Population (Full detail only — far LOD chunks stay silent for perf)
+            if (lodLevel === 0) {
+                if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
+                if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
+                if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
+                if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
+            }
 
         } else if (isHighway) {
             // Determine type

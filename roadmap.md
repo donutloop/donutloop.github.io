@@ -48,8 +48,10 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   once as a shared `1x1x1` unit `BoxGeometry` and drawn as one `InstancedMesh`
   per material (ADR 0011); per-instance matrices replace duplicated merged
   vertex buffers.
-- **⏳ PLANNED** Render-distance LOD — far chunks swap to low-poly/instanced
-  silhouettes; near chunks keep detail.
+- **✅ DONE (Round 4 / Gap B)** Render-distance LOD — far city chunks build
+  low-poly instanced silhouettes (coarse concrete boxes, no foliage/lights,
+  no population); near chunks keep full detail. ChunkManager upgrades/downgrades
+  a chunk when it crosses `lodDistance` (ADR 0012).
 - **⏳ PLANNED** Frame-budget telemetry in `check_world.mjs` (report FPS and
   draw-call count as machine-readable output).
 
@@ -107,7 +109,10 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - **Gap A — instanced buildings** ✅ RESOLVED (ADR 0011): building geometry
   is authored once (shared unit `BoxGeometry`) and rendered as per-material
   `InstancedMesh`, cutting retained vertex/memory cost before LOD work.
-  Next: **Gap B — instanced-building LOD**.
+  **Gap B — render-distance LOD** ✅ RESOLVED (ADR 0012, Round 4): far city
+  chunks build low-poly instanced silhouettes (coarse concrete boxes, no
+  foliage/lights/population); ChunkManager rebuilds a chunk when it crosses
+  `lodDistance`. Next: **Frame-budget telemetry** (Phase 1).
 - **Gap B — road-network graph**: needed for realistic traffic; keep it a pure
   data structure (`src/road_graph.js`) so `check_world.mjs` can assert
   connectivity without a browser.
