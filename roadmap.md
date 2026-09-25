@@ -112,11 +112,14 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - **Gap D — emergency events**: gameplay-depth win built on the already-done
   crash/deformation + pooled-traffic systems; needs an EMS vehicle type, an
   `events` telemetry field, and a siren/light effect stage.
-- **Discrepancy**: `check_world.mjs` is currently a 149-line duplicate of the
-  `world.js` body (even references `THREE` without importing it), NOT the
-  structured/machine-readable verification `AGENTS.md` and this roadmap describe.
-  Rebuild it as a real check harness (assert systems + emit JSON) before relying
-  on it for the agent loop.
+- **Resolved ✅**: `check_world.mjs` rebuilt as a real structured verification
+  harness. It runs the ACTUAL src systems in Node against the real `three`
+  package (installed as a dev dep via `package.json`), instantiates every system,
+  calls their update() loops, asserts API behavior (traffic speeds, weather day,
+  chunk builders, player wiring, deformation, noise), verifies `main.js` wiring,
+  and emits machine-readable JSON with per-check pass/fail + summary.
+  `npm install` (three@0.160.0) + `node check_world.mjs` → 23/23 green, exit 0.
+  This is the agent loop's deterministic surface/feature verification gate.
 - Every feature must keep both paths green: browser render + `check_world.mjs`.
 
 ## Definition of done

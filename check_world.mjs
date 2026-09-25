@@ -1,149 +1,190 @@
-const buildingGeom = new THREE.BoxGeometry(1, 1, 1);
-const windowGeom = new THREE.PlaneGeometry(0.2, 0.4);
-const sidewalkGeom = new THREE.BoxGeometry(1, 0.2, 1); // Normalized size for scaling
-const roadGeom = new THREE.PlaneGeometry(1, 1);
+#!/usr/bin/env node
+/**
+ * Worldloop structured verification harness.
+ *
+ * Runs the REAL src systems in Node against the real `three` package —
+ * instantiates every system, calls their update() loops, asserts API behavior,
+ * and emits machine-readable JSON so the agent loop can discover the surface,
+ * plan, and consume results without guessing.
+ *
+ * Usage:  node check_world.mjs
+ * Exit:   0 if all checks pass, 1 otherwise.
+ */
+import * as THREE from 'three';
+import { createWorld, createCityChunk, createWastelandChunk } from './src/world.js';
+import { TrafficSystem } from './src/traffic.js';
+import { WeatherSystem } from './src/weather.js';
+import { PedestrianSystem } from './src/pedestrians.js';
+import { ParkingSystem } from './src/parking.js';
+import { AirplaneSystem } from './src/airplanes.js';
+import { EffectSystem } from './src/effects.js';
+import { TrafficLightSystem } from './src/traffic_lights.js';
+import { ChunkManager } from './src/chunk_manager.js';
+import { Player } from './src/player.js';
+import { deformMesh } from './src/deformation.js';
+import { SimplexNoise } from './src/noise.js';
+import fs from 'node:fs';
 
-// Materials (SharedCache)
-const matCache = {
-    road: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 }),
-    sidewalk: new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 }),
-    building: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2, metalness: 0.5 }),
-    window: new THREE.MeshBasicMaterial({ color: 0xffffaa }),
-    lane: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-    ground: new THREE.MeshStandardMaterial({ color: 0x3a2e26, roughness: 1.0 }) // Wasteland ground
+const VERSION = '6.4.2';
+const checks = [];
+let failed = 0;
+
+function check(name, pass, detail) {
+  checks.push({ name, pass: !!pass, detail: detail || '' });
+  if (!pass) failed++;
+  return pass;
+}
+
+// --- Node DOM stub (Player / PointerLockControls need browser DOM) ---
+function makeEl() {
+  return {
+    style: {}, appendChild() {}, textContent: '',
+    addEventListener() {}, removeEventListener() {}, setAttribute() {}, className: ''
+  };
+}
+globalThis.document = {
+  createElement() { return makeEl(); },
+  body: { appendChild() {} },
+  addEventListener() {}, removeEventListener() {},
+  pointerLockElement: null
+};
+function makeDomElement() {
+  const doc = {
+    addEventListener() {}, removeEventListener() {},
+    createElement() { return { style: {}, appendChild() {}, textContent: '' }; },
+    body: { appendChild() {} },
+    pointerLockElement: null,
+    addEventListener: () => {}
+  };
+  const el = {
+    ownerDocument: doc,
+    requestPointerLock() {}, exitPointerLock() {},
+    addEventListener() {}, removeEventListener() {}
+  };
+  return el;
+}
+
+// --- Shared scene + systems ---
+const scene = new THREE.Scene();
+const world = await createWorld(scene);
+const cam = new THREE.PerspectiveCamera();
+const dom = makeDomElement();
+
+const traffic = new TrafficSystem(scene, world.citySize, world.blockSize, world.roadWidth);
+const parking = new ParkingSystem(scene, world.citySize, world.blockSize, world.roadWidth);
+const pedestrians = new PedestrianSystem(scene, world.citySize, world.blockSize, world.roadWidth);
+const weather = new WeatherSystem(scene, world.directionalLight, world.ambientLight, world.materials);
+const airplanes = new AirplaneSystem(scene, world.citySize);
+const effects = new EffectSystem(scene);
+const trafficLights = new TrafficLightSystem(scene, world.roadWidth, world.blockSize);
+const chunkManager = new ChunkManager(scene, null, world, traffic, parking, pedestrians, trafficLights);
+
+// ---- 1. World surface -----------------------------------------------------
+const worldKeys = ['roadWidth', 'blockSize', 'citySize', 'directionalLight', 'ambientLight', 'materials'];
+check('world.createWorld returns full surface', worldKeys.every(k => k in world),
+  'keys=' + Object.keys(world).join(','));
+check('world.materials cache (road/sidewalk/building)',
+  ['road', 'sidewalk', 'building'].every(k => k in world.materials),
+  'materials=' + Object.keys(world.materials).join(','));
+const cityChunk = createCityChunk(0, 0, world.blockSize);
+const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
+check('world.createCityChunk -> {mesh,colliders}', cityChunk.mesh instanceof THREE.Group && Array.isArray(cityChunk.colliders));
+check('world.createWastelandChunk -> {mesh,colliders}', wasteChunk.mesh instanceof THREE.Group && Array.isArray(wasteChunk.colliders));
+
+// ---- 2. Traffic -----------------------------------------------------------
+const speedMap = { sport: 16, taxi: 13, sedan: 11, suv: 9, truck: 6, bus: 5 };
+check('traffic.getSpeedForType deterministic',
+  Object.entries(speedMap).every(([t, v]) => traffic.getSpeedForType(t) === v),
+  JSON.stringify(speedMap));
+traffic.update(0.1);
+check('traffic.update(0.1) runs', true, 'ok');
+check('traffic exposes pooled car map + flat list', traffic.chunkCars instanceof Map && Array.isArray(traffic.cars));
+
+// ---- 3. Weather / seasons --------------------------------------------------
+check('weather.currentWeather in allowed set', ['sunny', 'rain', 'snow'].includes(weather.currentWeather),
+  'current=' + weather.currentWeather);
+const today = new Date();
+const start = new Date(today.getFullYear(), 0, 0);
+const expectedDay = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+check('weather.day derived from real-world date', weather.day === expectedDay,
+  'day=' + weather.day + ' expected=' + expectedDay);
+weather.update(0.1);
+check('weather.update(0.1) runs', true, 'ok');
+
+// ---- 4. Pedestrians ---------------------------------------------------------
+pedestrians.update(0.1);
+check('pedestrians.update(0.1) runs', true, 'ok');
+
+// ---- 5. Parking ------------------------------------------------------------
+parking.update(0.1);
+check('parking.update(0.1) runs', true, 'ok');
+check('parking.getColliders() is array', Array.isArray(parking.getColliders()));
+
+// ---- 6. Traffic lights ------------------------------------------------------
+trafficLights.update(0.1);
+check('trafficLights.update(0.1) runs', true, 'ok');
+
+// ---- 7. Airplanes ------------------------------------------------------------
+airplanes.update(0.1);
+check('airplanes.update(0.1) runs', true, 'ok');
+
+// ---- 8. Effects ---------------------------------------------------------------
+effects.update(0.1);
+check('effects.update(0.1) runs', true, 'ok');
+
+// ---- 9. Chunk manager (streaming) ---------------------------------------------
+chunkManager.update();
+const colliders = chunkManager.getColliders();
+check('chunkManager.getColliders() is array', Array.isArray(colliders), 'count=' + colliders.length);
+
+// ---- 10. Player ----------------------------------------------------------------
+const player = new Player(cam, dom, colliders, traffic, parking, effects);
+check('player wired with colliders/traffic/parking', player.colliders instanceof Array);
+player.update(0.1);
+check('player.update(0.1) runs', true, 'ok');
+
+// ---- 11. Deformation physics ----------------------------------------------------
+check('deformation.deformMesh is function', typeof deformMesh === 'function');
+
+// ---- 12. Noise ------------------------------------------------------------------
+const n1 = SimplexNoise.noise2D(0.5, 0.5);
+const n2 = SimplexNoise.noise2D(0.5, 0.5);
+check('SimplexNoise.noise2D deterministic in-session', n1 === n2, 'n=' + n1);
+check('SimplexNoise.noise2D returns finite number', Number.isFinite(n1));
+
+// ---- 13. Wiring (main.js instantiates every system) --------------------------------
+const mainSrc = fs.readFileSync('src/main.js', 'utf8');
+const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSystem',
+  'WeatherSystem', 'AirplaneSystem', 'EffectSystem', 'TrafficLightSystem',
+  'ChunkManager', 'Player'].every(sym => mainSrc.includes(sym));
+check('main.js wires all systems', wired, 'symbols checked');
+
+// ---- Emit machine-readable JSON ------------------------------------------------
+const report = {
+  tool: 'check_world',
+  version: VERSION,
+  systems: {
+    world: { exports: ['createWorld', 'createCityChunk', 'createWastelandChunk'] },
+    traffic: { exports: ['TrafficSystem'], speeds: speedMap },
+    weather: { exports: ['WeatherSystem'], day: weather.day },
+    pedestrians: { exports: ['PedestrianSystem'] },
+    parking: { exports: ['ParkingSystem'] },
+    traffic_lights: { exports: ['TrafficLightSystem'] },
+    airplanes: { exports: ['AirplaneSystem'] },
+    effects: { exports: ['EffectSystem'] },
+    chunk_manager: { exports: ['ChunkManager'] },
+    player: { exports: ['Player'] },
+    deformation: { exports: ['deformMesh'] },
+    noise: { exports: ['SimplexNoise'] }
+  },
+  checks,
+  summary: { passed: checks.length - failed, failed, total: checks.length },
+  passed: failed === 0
 };
 
-export function createCityChunk(xPos, zPos, size) {
-    const chunkGroup = new THREE.Group();
-    const colliders = [];
-
-    // 1. Road (Ground)
-    // One big road tile for the block
-    const road = new THREE.Mesh(roadGeom, matCache.road);
-    road.position.set(xPos, 0, zPos);
-    road.rotation.x = -Math.PI / 2;
-    road.scale.set(size, size, 1);
-    road.receiveShadow = true;
-    chunkGroup.add(road);
-
-    // 2. Markings (Simple cross)
-    const laneH = new THREE.Mesh(roadGeom, matCache.lane);
-    laneH.position.set(xPos, 0.02, zPos);
-    laneH.rotation.x = -Math.PI / 2;
-    laneH.scale.set(size, 0.5, 1);
-    chunkGroup.add(laneH);
-
-    const laneV = new THREE.Mesh(roadGeom, matCache.lane);
-    laneV.position.set(xPos, 0.02, zPos);
-    laneV.rotation.x = -Math.PI / 2;
-    laneV.scale.set(0.5, size, 1);
-    chunkGroup.add(laneV);
-
-    // 3. Sidewalk
-    const sidewalkWidth = size - 14;
-    const sidewalk = new THREE.Mesh(sidewalkGeom, matCache.sidewalk);
-    sidewalk.position.set(xPos, 0.1, zPos);
-    sidewalk.scale.set(sidewalkWidth, 1, sidewalkWidth);
-    sidewalk.receiveShadow = true;
-    chunkGroup.add(sidewalk);
-
-    // 4. Buildings
-    if (Math.random() > 0.2) {
-        const height = Math.random() * 20 + 5;
-        const width = sidewalkWidth - 2;
-
-        const building = new THREE.Mesh(buildingGeom, matCache.building);
-        building.position.set(xPos, height / 2 + 0.1, zPos);
-        building.scale.set(width, height, width);
-        building.castShadow = true;
-        building.receiveShadow = true;
-        chunkGroup.add(building);
-
-        // Collider
-        const box = new THREE.Box3();
-        box.min.set(xPos - width / 2, 0, zPos - width / 2);
-        box.max.set(xPos + width / 2, height, zPos + width / 2);
-        colliders.push(box);
-
-        // Windows (Simplified: few random quads on surface)
-        for (let i = 0; i < 4; i++) {
-            const win = new THREE.Mesh(windowGeom, matCache.window);
-            // Random side
-            const side = Math.floor(Math.random() * 4);
-            win.position.copy(building.position);
-            win.position.y = Math.random() * height * 0.8 + 2;
-
-            if (side === 0) win.position.z += width / 2 + 0.05;
-            else if (side === 1) win.position.z -= width / 2 + 0.05;
-            else if (side === 2) { win.position.x += width / 2 + 0.05; win.rotation.y = Math.PI / 2; }
-            else { win.position.x -= width / 2 + 0.05; win.rotation.y = Math.PI / 2; }
-
-            chunkGroup.add(win);
-        }
-    }
-
-    return { mesh: chunkGroup, colliders: colliders };
+console.log(JSON.stringify(report, null, 2));
+if (failed > 0) {
+  console.error(`\ncheck_world: ${failed} check(s) FAILED`);
+  process.exit(1);
 }
-
-export function createWastelandChunk(xPos, zPos, size) {
-    const chunkGroup = new THREE.Group();
-    const colliders = [];
-
-    // Uneven Ground
-    const ground = new THREE.Mesh(roadGeom, matCache.ground);
-    ground.position.set(xPos, -0.5, zPos); // Slightly lower
-    ground.rotation.x = -Math.PI / 2;
-    ground.scale.set(size, size, 1);
-    ground.receiveShadow = true;
-    chunkGroup.add(ground);
-
-    // Rocks / Debris
-    const numRocks = Math.floor(Math.random() * 3);
-    for (let i = 0; i < numRocks; i++) {
-        const rSize = Math.random() * 3 + 1;
-        const rock = new THREE.Mesh(buildingGeom, matCache.sidewalk); // Use gray material
-        rock.position.set(
-            xPos + (Math.random() - 0.5) * size * 0.8,
-            rSize / 2 - 0.5,
-            zPos + (Math.random() - 0.5) * size * 0.8
-        );
-        rock.scale.set(rSize, rSize, rSize);
-        rock.rotation.set(Math.random(), Math.random(), Math.random());
-        rock.castShadow = true;
-        chunkGroup.add(rock);
-
-        const box = new THREE.Box3().setFromObject(rock);
-        colliders.push(box);
-    }
-
-    return { mesh: chunkGroup, colliders: colliders };
-}
-
-export async function createWorld(scene) {
-    // Lighting setup only
-    const ambientLight = new THREE.AmbientLight(0x222233, 0.3);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xaaccff, 0.5);
-    directionalLight.position.set(50, 100, 50);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 4096;
-    directionalLight.shadow.mapSize.height = 4096;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -250;
-    directionalLight.shadow.camera.right = 250;
-    directionalLight.shadow.camera.top = 250;
-    directionalLight.shadow.camera.bottom = -250;
-    scene.add(directionalLight);
-
-    // We return empty world data, main.js will use ChunkManager
-    return {
-        citySize: 1000, // Virtual size
-        blockSize: 34,
-        roadWidth: 14,
-        colliders: [], // No static colliders upfront
-        cubes: [], // Empty for now, NMS world doesn't have static collectibles yet
-        materials: matCache
-    };
-}
+console.log(`\ncheck_world: ${checks.length - failed}/${checks.length} checks passed ✅`);

@@ -1,0 +1,11 @@
+{
+  "name": "worldloop",
+  "version": "6.4.2",
+  "type": "module",
+  "scripts": {
+    "check": "node check_world.mjs"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  }
+}
