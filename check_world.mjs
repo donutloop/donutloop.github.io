@@ -24,6 +24,7 @@ import { Player } from './src/player.js';
 import { deformMesh } from './src/deformation.js';
 import { SimplexNoise } from './src/noise.js';
 import { FrameBudgetTelemetry } from './src/telemetry.js';
+import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
@@ -212,6 +213,22 @@ const frameBudget = telemetry.measureFrameBudget(teleStep, 1 / 60, 120);
 check('telemetry.measureFrameBudget -> achievable FPS > 0', frameBudget.fps > 0, 'fps=' + frameBudget.fps.toFixed(2) + ' frameMs=' + frameBudget.avgFrameMs.toFixed(3));
 check('telemetry.measureFrameBudget -> 120-frame loop completes', frameBudget.frames === 120, 'frames=' + frameBudget.frames);
 
+// ---- Road-network graph (deterministic implicit grid graph) --------------------
+const roadGraph = new RoadGraph(34, 16);
+const roadGraph2 = new RoadGraph(34, 16);
+check('roadGraph builds nodes for road cells', roadGraph.nodeCount() > 0, roadGraph.nodeCount() + ' nodes');
+check('roadGraph is deterministic (same radius -> identical graph)',
+  roadGraph.nodeCount() === roadGraph2.nodeCount(), 'nodes=' + roadGraph.nodeCount());
+const conn = roadGraph.connected();
+check('roadGraph whole network is one connected component from origin',
+  conn.connected, `reached ${conn.reached}/${conn.total}`);
+const path = roadGraph.shortestPath(roadGraph.centerKey, roadGraph.key(10, 0));
+check('roadGraph routes origin -> highway via shortest path',
+  Array.isArray(path) && path.length > 1, (path && path.length) + ' hops');
+const turns = roadGraph.turnsAt(roadGraph.key(3, 0), 'x');
+check('roadGraph offers perpendicular turns at city intersections',
+  turns.length > 0, turns.length + ' turn targets');
+
 // ---- Emit machine-readable JSON ------------------------------------------------
 const report = {
   tool: 'check_world',
@@ -229,7 +246,8 @@ const report = {
     player: { exports: ['Player'] },
     deformation: { exports: ['deformMesh'] },
     noise: { exports: ['SimplexNoise'] },
-    telemetry: { exports: ['FrameBudgetTelemetry'] }
+    telemetry: { exports: ['FrameBudgetTelemetry'] },
+    road_graph: { exports: ['RoadGraph'] }
   },
   telemetry: {
     fps: +frameBudget.fps.toFixed(2),

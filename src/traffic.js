@@ -11,6 +11,9 @@ export class TrafficSystem {
         this.chunkCars = new Map();
         this.cars = []; // Flat list for easy loop
 
+        // Road-network graph for realistic intersection routing.
+        this.roadGraph = null;
+
         // Object Pooling
         this.carPool = {
             sedan: [],
@@ -110,7 +113,9 @@ export class TrafficSystem {
                         chunkZ: zOffset,
                         chunkSize: chunkSize,
                         cx: cx,
-                        cz: cz
+                        cz: cz,
+                        // Road-network routing state
+                        lastNodeKey: null
                     });
                 } else {
                     // Spawn failed (invalid spot), return to pool immediately
@@ -200,12 +205,13 @@ export class TrafficSystem {
         return null;
     }
 
-    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem) {
+    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph) {
         this.player = player;
         this.parkingSystem = parkingSystem;
         this.trafficLightSystem = trafficLightSystem;
         this.effectSystem = effectSystem;
         this.pedestrianSystem = pedestrianSystem;
+        this.roadGraph = roadGraph || null;
     }
 
     // [Gap C] Crosswalk timing — cars yield to a pedestrian present at / crossing
@@ -307,6 +313,37 @@ export class TrafficSystem {
                     car.mesh.position.x += move;
                 } else {
                     car.mesh.position.z += move;
+                }
+
+                // 3. ROAD-NETWORK ROUTING — turn at intersections onto
+                // perpendicular roads using the implicit RoadGraph, so cars
+                // follow realistic routes instead of straight lane-following.
+                if (this.roadGraph) {
+                    const node = this.roadGraph.nodeAtWorld(car.mesh.position.x, car.mesh.position.z);
+                    if (node && node.key !== car.lastNodeKey) {
+                        car.lastNodeKey = node.key;
+                        const perp = car.axis === 'x' ? 'z' : 'x';
+                        // Only turn if a perpendicular road exists at this node.
+                        if (node[perp] && Math.random() < 0.25) {
+                            const turnTargets = this.roadGraph.neighbors(node.key)
+                                .filter(e => e.axis === perp);
+                            if (turnTargets.length) {
+                                const t = turnTargets[Math.floor(Math.random() * turnTargets.length)];
+                                const tn = this.roadGraph.getNode(t.to);
+                                let dir, rot;
+                                if (perp === 'z') {
+                                    dir = tn.cz > node.cz ? 1 : -1;
+                                    rot = tn.cz > node.cz ? 0 : Math.PI;
+                                } else {
+                                    dir = tn.cx > node.cx ? 1 : -1;
+                                    rot = tn.cx > node.cx ? Math.PI / 2 : -Math.PI / 2;
+                                }
+                                car.axis = perp;
+                                car.direction = dir;
+                                car.mesh.rotation.y = rot;
+                            }
+                        }
+                    }
                 }
 
                 // MIGRATION: Update Chunk Ownership

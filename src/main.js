@@ -11,6 +11,7 @@ import { EffectSystem } from './effects.js';
 import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
 import { ChunkManager } from './chunk_manager.js';
 import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget telemetry
+import { RoadGraph } from './road_graph.js'; // [NEW] implicit road-network graph
 
 let player;
 let prevTime = performance.now();
@@ -26,6 +27,7 @@ let effectSystem;
 let trafficLightSystem; // [NEW]
 let chunkManager;
 let telemetry; // [NEW]
+let roadGraph; // [NEW] road-network graph for realistic car routing
 
 function initScore() {
     scoreElement = document.createElement('div');
@@ -93,8 +95,13 @@ async function init() {
         player.parkingSystem = parkingSystem;
         player.pedestrianSystem = pedestrianSystem;
 
+        // [NEW] Road-network graph — deterministic implicit graph over the
+        // chunk grid, so cars route intersection-to-intersection realistically.
+        roadGraph = new RoadGraph(worldData.blockSize, 16);
+        window.roadGraph = roadGraph; // Machine-readable on the browser path too
+
         // Dependency Injection
-        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem);
+        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph);
         parkingSystem.setDependencies(effectSystem);
         pedestrianSystem.setDependencies(trafficLightSystem, parkingSystem, effectSystem);
 

@@ -63,9 +63,12 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - Traffic + traffic lights ✅ DONE
 - Street parking ✅ DONE
 - Smart pedestrians (crosswalks, obstacle avoidance) ✅ DONE
-- **⏳ PLANNED** Road-network graph — build an implicit directed graph from the
-  chunk grid so cars can follow realistic routes instead of pure lane-following;
-  expose it to `check_world.mjs` so the agent can verify connectivity.
+- **✅ DONE (Round 6)** Road-network graph — `src/road_graph.js` builds a
+  deterministic implicit directed graph over the chunk grid (nodes at road
+  cells, directed edges along shared road axes, two-way). Cars turn at
+  intersections onto perpendicular roads via the graph instead of pure
+  lane-following. Exposed to `check_world.mjs` (connectivity + shortest-path +
+  turn checks) and wired into `main.js` / `TrafficSystem`.
 - Crosswalk timing integration — pedestrians and traffic lights share one clock so
   cars yield at crosswalks with a pedestrian present. ✅ DONE (ADR 0010)
 
