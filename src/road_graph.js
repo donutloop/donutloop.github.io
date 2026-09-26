@@ -97,7 +97,11 @@ export class RoadGraph {
     return n;
   }
 
-  getNode(cx, cz) { return this.nodes.get(this.key(cx, cz)) || null; }
+  getNode(cx, cz) {
+    // Accept either a key string ("cx,cz") or two integer coords (cx, cz).
+    if (typeof cx === 'string') return this.nodes.get(cx) || null;
+    return this.nodes.get(this.key(cx, cz)) || null;
+  }
 
   /**
    * Directed neighbors of a node: [{ to, axis, dir }].
