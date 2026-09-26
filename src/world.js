@@ -721,10 +721,10 @@ export async function createWorld(scene) {
     directionalLight.shadow.mapSize.height = 2048;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -200;
-    directionalLight.shadow.camera.right = 200;
-    directionalLight.shadow.camera.top = 200;
-    directionalLight.shadow.camera.bottom = -200;
+    directionalLight.shadow.camera.left = -80;
+    directionalLight.shadow.camera.right = 80;
+    directionalLight.shadow.camera.top = 80;
+    directionalLight.shadow.camera.bottom = -80;
     scene.add(directionalLight);
 
     return {

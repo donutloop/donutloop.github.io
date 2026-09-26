@@ -24,10 +24,10 @@ export const QUALITY_TIERS = Object.freeze({
 // renderer at boot; drawDistanceScale scales the chunk-streaming radius;
 // postFx is consumed later by the post-FX tier pass (AAA-16).
 export const QUALITY_PARAMS = Object.freeze({
-  [QUALITY_TIERS.LOW]:    { pixelRatio: 1.0, drawDistanceScale: 0.75, postFx: false },
-  [QUALITY_TIERS.MEDIUM]: { pixelRatio: 1.5, drawDistanceScale: 0.90, postFx: true },
-  [QUALITY_TIERS.HIGH]:   { pixelRatio: 2.0, drawDistanceScale: 1.00, postFx: true },
-  [QUALITY_TIERS.ULTRA]:  { pixelRatio: 3.0, drawDistanceScale: 1.15, postFx: true }
+  [QUALITY_TIERS.LOW]:    { pixelRatio: 1.0, drawDistanceScale: 0.75, postFx: false, shadowMap: true },
+  [QUALITY_TIERS.MEDIUM]: { pixelRatio: 1.5, drawDistanceScale: 0.90, postFx: true, shadowMap: true },
+  [QUALITY_TIERS.HIGH]:   { pixelRatio: 2.0, drawDistanceScale: 1.00, postFx: true, shadowMap: true },
+  [QUALITY_TIERS.ULTRA]:  { pixelRatio: 3.0, drawDistanceScale: 1.15, postFx: true, shadowMap: true }
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -180,6 +180,17 @@ export class Settings {
   postFxEnabled() {
     return QUALITY_PARAMS[this.quality].postFx;
   }
+
+  /** Whether the directional shadow map should be rendered for the tier. */
+  shadowMap() {
+    return this.qualityParams().shadowMap !== false;
+  }
+
+  /** Resolve the active quality-tier params (used by the frame governor). */
+  qualityParams() {
+    return QUALITY_PARAMS[this.quality] || QUALITY_PARAMS[QUALITY_TIERS.HIGH];
+  }
+
 
   /** Machine-readable snapshot for telemetry / verification. */
   snapshot() {

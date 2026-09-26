@@ -22,6 +22,7 @@ import { setSeed, getSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seed
 import { InputManager } from './input/index.js'; // [AAA-06] unified logical input
 import { ActionMap } from './input/action_map.js'; // [AAA-06] action->code map
 import { Settings, createStorage } from './core/settings.js';
+import { AdaptiveFrameGovernor } from './performance.js';
 import { SaveGame } from './core/save.js'; // [AAA-08] persisted save/load (seed + player + progress) // [AAA-07] persisted settings (quality/remap/audio)
 
 let player;
@@ -95,6 +96,20 @@ async function init() {
         // Browser: builds an EffectComposer and renders through it each frame.
         // Node/verify: no renderer → enabled=false, but update() stays deterministic.
         postFx = new PostProcessingPipeline({ renderer, scene, camera });
+        // --- minimum-frame-rate governor (best-effort 60 FPS) ---
+        // The ladder is resolved from the active quality tier + real frame
+        // times each frame; see src/performance.js for the deterministic logic.
+        const governor = new AdaptiveFrameGovernor({ targetFps: 60 });
+        postFx.enabled = settings.postFxEnabled();
+        renderer.shadowMap.enabled = settings.shadowMap();
+        renderer.setPixelRatio(settings.pixelRatioCap());
+        let lastPixelCap = settings.pixelRatioCap();
+        let lastShadows = settings.shadowMap();
+        let lastDrawScale = settings.drawDistanceScale();
+        let lastPostFx = settings.postFxEnabled();
+        chunkManager.renderDistance = Math.max(1, Math.round(
+            chunkManager.renderDistance * settings.drawDistanceScale()
+        ));
         if (postFx.enabled) {
             window.addEventListener('resize', () => postFx.resize());
         }
@@ -319,6 +334,26 @@ async function init() {
                             const weatherState = weatherSystem ? weatherSystem.currentWeatherState : null;
                             postFx.update(weatherState, neonBoost);
                         }
+
+                        governor.recordFrame(frameDt * 1000);
+                        governor.tick(performance.now());
+                        const q = governor.resolve(settings);
+                        if (q.pixelRatioCap !== lastPixelCap) {
+                            lastPixelCap = q.pixelRatioCap;
+                            renderer.setPixelRatio(q.pixelRatioCap);
+                        }
+                        if (q.shadows !== lastShadows) {
+                            lastShadows = q.shadows;
+                            renderer.shadowMap.enabled = q.shadows;
+                        }
+                        if (q.postFx !== lastPostFx) {
+                            lastPostFx = q.postFx;
+                            postFx.enabled = q.postFx;
+                        }
+                        chunkManager.renderDistance = Math.max(1, Math.round(
+                            chunkManager.renderDistance * q.drawDistanceScale / lastDrawScale
+                        ));
+                        lastDrawScale = q.drawDistanceScale;
 
                         if (postFx && postFx.enabled) {
                             postFx.render();

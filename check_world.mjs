@@ -873,6 +873,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { ActionMap, DEFAULT_BINDINGS, InputManager, KeyboardAdapter, ACTIONS } from './src/input/index.js'; // [AAA-06] logical input
 import { Settings, QUALITY_TIERS, QUALITY_PARAMS, DEFAULT_SETTINGS, createStorage } from './src/core/settings.js';
+import { AdaptiveFrameGovernor, QUALITY_LADDER } from './src/performance.js';
 import { SaveGame, snapshotClock, SAVE_VERSION } from './src/core/save.js';
  // [AAA-08] persisted save/load // [AAA-07] persisted settings
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -920,6 +921,72 @@ if (process.argv.includes('--ci')) {
 }
 
 // ---- Emit machine-readable JSON ------------------------------------------------
+
+// ---- minimum-frame-rate governor (pure ladder) ----------------------------
+{
+  const g = new AdaptiveFrameGovernor({ targetFps: 60, cooldownMs: 100, recoverFrames: 60 });
+  // Feed 33.3ms/frame (~30 FPS) — well under target → must degrade to the
+  // last (most degraded) ladder rung, one step per cooldown window.
+  let now = 0;
+  for (let i = 0; i < 20; i++) {
+    g.recordFrame(33.3);
+    now += 120; // > cooldownMs so each frame can step
+    g.tick(now);
+  }
+  check('governor degrades to worst rung when 30 FPS sustained',
+    g.level === QUALITY_LADDER.length - 1,
+    'level=' + g.level + ' ladder=' + QUALITY_LADDER.length);
+  check('governor disables post-fx first (costliest lever)',
+    QUALITY_LADDER[1].postFx === false,
+    'ladder[1].postFx=' + QUALITY_LADDER[1].postFx);
+  check('governor drops to 1x pixels before shadows',
+    QUALITY_LADDER[2].pixelRatioCap === 1.0 && QUALITY_LADDER[2].shadows === true,
+    'ladder[2].pixelRatioCap=' + QUALITY_LADDER[2].pixelRatioCap + ' shadows=' + QUALITY_LADDER[2].shadows);
+  check('governor disables shadows before shrinking radius',
+    QUALITY_LADDER[3].shadows === false && QUALITY_LADDER[3].drawDistanceScale === 1.0,
+    'ladder[3].shadows=' + QUALITY_LADDER[3].shadows + ' drawScale=' + QUALITY_LADDER[3].drawDistanceScale);
+
+  // Recovery: feed 16ms (~62 FPS) for enough frames → must climb back.
+  const g2 = new AdaptiveFrameGovernor({ targetFps: 60, cooldownMs: 100, recoverFrames: 60 });
+  let now2 = 0;
+  for (let i = 0; i < 8; i++) { g2.recordFrame(33.3); now2 += 120; g2.tick(now2); }
+  const degradedLevel = g2.level;
+  for (let i = 0; i < 240; i++) { g2.recordFrame(15); now2 += 15; g2.tick(now2); }
+  check('governor recovers one rung after sustained 66 FPS',
+    g2.level < degradedLevel,
+    'degraded=' + degradedLevel + ' recovered=' + g2.level);
+  check('governor resolves tier post-fx + shadow knobs deterministically',
+    (() => {
+      const settings = { qualityParams: () => ({ postFx: true, shadowMap: true, pixelRatio: 1.5, drawDistanceScale: 1.0 }) };
+      const q0 = new AdaptiveFrameGovernor({ enabled: true }).resolve(settings);
+      const q1 = new AdaptiveFrameGovernor({ enabled: true }).resolve({ qualityParams: () => ({ postFx: false, shadowMap: false, pixelRatio: 1.0, drawDistanceScale: 0.85 }) });
+      return q0.postFx === true && q1.postFx === false && q0.drawDistanceScale === 1.0;
+    })(),
+    'resolve() respects tier knobs');
+  check('governor is inert when disabled (Node harness)',
+    (() => {
+      const g3 = new AdaptiveFrameGovernor({ enabled: false });
+      for (let i = 0; i < 10; i++) { g3.recordFrame(33.3); g3.tick(i * 120); }
+      return g3.level === 0 && g3.snapshot().steps === 0;
+    })(),
+    'disabled governor holds level 0');
+  check('quality ladder is costliest-first and monotonic',
+    (() => QUALITY_LADDER.every((r, i) => i === 0 || r.postFx <= QUALITY_LADDER[i - 1].postFx))(),
+    'ladder len=' + QUALITY_LADDER.length);
+}
+// ---- quality-tier shadow knob --------------------------------------------
+{
+  const s = new Settings();
+  s.setQuality(QUALITY_TIERS.HIGH);
+  check('quality tier exposes shadowMap knob',
+    s.shadowMap() === true && s.qualityParams().shadowMap === true,
+    'shadowMap=' + s.shadowMap());
+  check('quality tier keeps post-fx + draw-distance defaults',
+    s.postFxEnabled() === true && s.drawDistanceScale() >= 1.0,
+    'postFx=' + s.postFxEnabled() + ' draw=' + s.drawDistanceScale());
+}
+
+
 const report = {
   tool: 'check_world',
   version: VERSION,

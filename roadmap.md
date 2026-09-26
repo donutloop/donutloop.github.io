@@ -268,6 +268,13 @@ and `npm run test:nightly` runs the seeded marathon with flake-tracking.
   quality tiers: pixel-diff baselines across the settings tier × postFX matrix
   (extends AAA-18 beyond a single tier). *(ADR 0022/0024)* M
 - **✅ AAA-29** Perf-regression thresholds over `telemetry.js` frame budget:
+- **✅ AAA-29b** Minimum-frame-rate governor (`src/performance.js`): best-effort 60 FPS. Tracks a
+  frame-time EMA and walks a costliest-first ladder (post-fx/bloom → 1x pixels → shadow map →
+  chunk radius) when throughput drops below target, recovering one step at a time once the budget
+  is comfortably met. Post-fx is gated by the active quality tier (bloom was previously always-on
+  regardless of tier — the single biggest GPU cost). Directional shadow frustum now covers only the
+  streamed city (±80 from ±200), cutting the shadow-pass area ~6×. Ladder logic is pure, so the
+  Node harness asserts degradation/recovery deterministically.
   fps / draw-call / chunk-budget limits per quality tier, fail on regression. *(ADR 0024)* M
 - **✅ AAA-30** Mutation testing: mutate seeded sim paths (RNG, road graph, weather,
   chunk LOD) and assert the suite still catches them — guards the verification
