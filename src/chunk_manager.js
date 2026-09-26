@@ -191,9 +191,22 @@ export class ChunkManager {
             this.chunkPool.delete(id);
             chunkData = pooled;
             if (isCity && chunkData.lodLevel === 0) {
-                this.trafficSystem.loadChunk(cx, cz, chunkData);
-                this.parkingSystem.loadChunk(cx, cz, chunkData);
+                // Spawn full population (traffic + parking + pedestrians +
+                // lights + construction) — all were released in unloadChunk.
+                // Pass a biome STRING, NOT the chunkData object: traffic.loadChunk
+                // calls biome.startsWith('highway'), and an object throws
+                // `n.startsWith is not a function`.
+                if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
+                if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
+                if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
+                if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
                 this.constructionSystem.loadChunk(cx, cz, chunkData);
+            } else if (isHighway) {
+                // Reload traffic for pooled highways (cars released on unloadChunk).
+                let type = 'x';
+                if (isHighwayX && isHighwayZ) type = 'cross';
+                else if (isHighwayZ) type = 'z';
+                if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, `highway_${type}`);
             }
         } else if (isCity) {
             // LOD is player-relative: the detailed area follows the car, only the

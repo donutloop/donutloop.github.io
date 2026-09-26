@@ -509,6 +509,53 @@ player.weatherSystem = weather;
         updates === 1, 'updates=' + updates);
 }
 
+// ---- [AAA-10 regression] Pooled re-stream passes a biome STRING ----
+// The old pooled path handed the chunkData OBJECT to traffic.loadChunk, which
+// calls biome.startsWith('highway') — that threw `n.startsWith is not a
+// function`. Reloading a pooled city/highway chunk must pass 'city'/'highway_*'
+// and must NOT throw.
+{
+    const scene = { add() {}, remove() {} };
+    const worldData = { blockSize: 20, roadWidth: 14 };
+    let trafficBiome = null;
+    let trafficCalls = 0;
+    const traffic = {
+        loadChunk(cx, cz, biome) {
+            // Mirror the real TrafficSystem contract: startsWith on biome.
+            biome.startsWith('highway');
+            trafficBiome = biome;
+            trafficCalls++;
+        },
+        unloadChunk() {}
+    };
+    const noop = { loadChunk() {}, unloadChunk() {} };
+    const mgr = new ChunkManager(scene, null, worldData, traffic, noop, noop, noop, noop);
+
+    // City chunk (0,0): dist 0 < 6 -> city, lodLevel 0 -> spawns population.
+    mgr.loadChunk(0, 0);
+    check('AAA-10 regression: fresh city chunk passes "city" to traffic',
+        trafficBiome === 'city', 'biome=' + trafficBiome);
+
+    // Unload -> pooled; reload must NOT throw and must pass 'city' again.
+    mgr.unloadChunk('0,0');
+    let threw = false;
+    try { mgr.loadChunk(0, 0); } catch (e) { threw = true; }
+    check('AAA-10 regression: pooled city re-stream passes "city" (no startsWith throw)',
+        !threw && trafficBiome === 'city', 'threw=' + threw + ' biome=' + trafficBiome);
+
+    // Highway chunk (6,0): dist 6 (not <6) & |cz| 0 <=5 -> highway_x.
+    mgr.loadChunk(6, 0);
+    check('AAA-10 regression: fresh highway chunk passes "highway_x"',
+        trafficBiome === 'highway_x', 'biome=' + trafficBiome);
+
+    // Unload -> pooled highway; reload must reload traffic and not throw.
+    mgr.unloadChunk('6,0');
+    threw = false;
+    try { mgr.loadChunk(6, 0); } catch (e) { threw = true; }
+    check('AAA-10 regression: pooled highway re-stream reloads traffic (no throw)',
+        !threw && trafficBiome === 'highway_x', 'threw=' + threw + ' biome=' + trafficBiome);
+}
+
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------
