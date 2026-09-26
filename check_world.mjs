@@ -244,6 +244,18 @@ parking.update(0.1);
 check('parking.update(0.1) runs', true, 'ok');
 check('parking.getColliders() is array', Array.isArray(parking.getColliders()));
 
+// ---- 5b. Parked cars must sit OFF the road band ------------------------------
+// Regression: cars were parked with lateral offset (roadHalf - 1.4) which put
+// their center INSIDE the asphalt. Fix: roadHalf + carHalf + curb gap, so
+// lateral |coord| must clear the road band (roadWidth/2) by >= 1.0m.
+parking.loadChunk(0, 0);
+const halfRoad = world.roadWidth / 2;
+const offRoad = parking.cars.every(c =>
+  Math.abs(c.position.z) >= halfRoad + 1.0 ||
+  Math.abs(c.position.x) >= halfRoad + 1.0
+);
+check('parking: cars parked OFF the road band', offRoad, 'ok');
+
 // ---- 6. Traffic lights ------------------------------------------------------
 trafficLights.update(0.1);
 check('trafficLights.update(0.1) runs', true, 'ok');

@@ -122,11 +122,12 @@ export class ParkingSystem {
         const stepSize = 10.0;
 
         // Better lateral placement:
-        // Road edge is at halfWidth (12).
-        // Car width ~2.2.
-        // Center should be roughly at halfWidth - 1.5 ( = 10.5).
-        // This puts outer edge at 11.6 (0.4 gap to curb) and inner at 9.4.
-        const lateralOffset = halfWidth - 1.4;
+        // Road edge is at halfWidth (13).
+        // Car width ~2.2 (half = 1.1).
+        // Center should sit OFF the road: halfWidth + carHalf + curb gap.
+        // halfWidth + 1.4 = 14.4 -> outer edge at 14.4, inner edge at 13.3
+        // (0.3m gap to the road edge, car fully off the asphalt).
+        const lateralOffset = halfWidth + 1.4;
 
         zones.forEach(zone => {
             // Iterate through the zone in steps
