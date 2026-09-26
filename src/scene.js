@@ -44,9 +44,23 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-export function animate(updateCallback) {
-    requestAnimationFrame(() => animate(updateCallback));
-    if (updateCallback) updateCallback();
-    // main.js owns the render call (and the post-processing composer),
-    // so the callback is responsible for rendering each frame.
+/**
+ * [AAA-02] Drive the animation loop through a FrameLoop: exactly ONE update
+ * per frame, explicit clamped dt, and a frame budget that drops a frame when
+ * the update+render cost overshoots (so the sim never spirals into a death
+ * loop). On a budget-skip the frame does no update/render work and the canvas
+ * simply keeps its last frame; the sim recovers on the next frame.
+ */
+export function animate(loop, update) {
+    const frame = (now) => {
+        const res = loop.tick(now);
+        if (!res.first && !res.skipped) {
+            // Measure the real update+render cost for the frame budget.
+            const t0 = performance.now();
+            update(res.dt);
+            loop.reportWork(performance.now() - t0);
+        }
+        requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
 }

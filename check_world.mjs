@@ -28,6 +28,7 @@ import { FrameBudgetTelemetry } from './src/telemetry.js';
 import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
 import { EmergencySystem } from './src/emergency.js';
 import { ConstructionSystem } from './src/construction.js';
+import { FrameLoop } from './src/loop.js'; // [AAA-02] frame loop hygiene
 import { PostProcessingPipeline } from './src/effects.js'; // [NEW] post-processing pipeline // [NEW] Gap D — emergency response
 import { Minimap, DISTRICT_PALETTE, BIOMES } from './src/minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 import fs from 'node:fs';
@@ -303,12 +304,39 @@ const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSyste
   'ChunkManager', 'Player'].every(sym => mainSrc.includes(sym));
 check('main.js wires all systems', wired, 'symbols checked');
 check('main.js passes pedestrianSystem to traffic.setDependencies', mainSrc.includes('pedestrianSystem)'), '5th dep wired');
-        check('main.js wires EmergencySystem -> emergency response', mainSrc.includes('EmergencySystem') && mainSrc.includes('emergencySystem.update(delta)'));
-  check('main.js wires ConstructionSystem -> animated cranes', mainSrc.includes('ConstructionSystem') && mainSrc.includes('constructionSystem.update(delta)'));
+        check('main.js wires EmergencySystem -> emergency response', mainSrc.includes('EmergencySystem') && mainSrc.includes('emergencySystem.update(dt)'));
+  check('main.js wires ConstructionSystem -> animated cranes', mainSrc.includes('ConstructionSystem') && mainSrc.includes('constructionSystem.update(dt)'));
 
         check('main.js hooks player crashes -> emergency.respond', mainSrc.includes('player.emergencySystem'));
         check('main.js passes emergencySystem to traffic.setDependencies', mainSrc.includes('roadGraph, emergencySystem'));
 check('main.js wires FrameBudgetTelemetry', mainSrc.includes('FrameBudgetTelemetry') && mainSrc.includes('recordFrame'), 'telemetry wired');
+
+// ---- AAA-02: frame loop — exactly one update per frame, explicit clamped
+// dt, and a frame budget that drops a frame when cost overshoots --------------
+const frameLoop = new FrameLoop({ maxDt: 0.1, budgetMs: 16.7 });
+// 1) explicit clamped dt: a backgrounded-tab stall (2s) must clamp to maxDt.
+frameLoop.step(3, 2.0, 1);
+check('AAA-02: explicit dt is clamped to maxDt on a long stall',
+  frameLoop.clamped > 0 && frameLoop.lastDt === frameLoop.maxDt,
+  'clamped=' + frameLoop.clamped + ' lastDt=' + frameLoop.lastDt + ' maxDt=' + frameLoop.maxDt);
+
+// 2) exactly one update() per frame: the animate callback must call
+// chunkManager.update() exactly once (the old loop called it twice).
+// The init-time load at the top of main.js is NOT part of the per-frame loop,
+// so scope the count to the animate(loop, ...) callback region.
+const mainLoopSrc = fs.readFileSync('src/main.js', 'utf8');
+const loopRegion = mainLoopSrc.slice(mainLoopSrc.indexOf('animate(loop'));
+const updateCalls = loopRegion.match(/chunkManager\.update\(\)/g);
+check('AAA-02: exactly one chunkManager.update() per frame',
+  updateCalls && updateCalls.length === 1,
+  'calls=' + (updateCalls ? updateCalls.length : 0));
+
+// 3) frame budget: over-budget work forces the NEXT frame's work to drop.
+const slowLoop = new FrameLoop({ maxDt: 0.1, budgetMs: 16.7 });
+const slowRes = slowLoop.step(8, 1 / 60, 40);
+check('AAA-02: frame budget drops frames when update cost overshoots',
+  slowRes.skipped > 0 && slowLoop.overBudget > 0,
+  'skipped=' + slowRes.skipped + ' overBudget=' + slowLoop.overBudget);
 
 // ---- 14. Frame-budget telemetry (Phase 1 / Gap B next) ------------------------
 const telemetry = new FrameBudgetTelemetry();

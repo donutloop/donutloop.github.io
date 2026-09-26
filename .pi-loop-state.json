@@ -1,7 +1,6 @@
 {
-  "round": 13,
-  "feature": "night-time window illumination",
-  "lastCommit": "8fc201a",
-  "checksPassed": 75,
-  "finishedAt": "2026-09-26T00:00:00Z"
+  "round": 2,
+  "feature": "AAA-02 frame loop: one update/frame, clamped dt, frame budget",
+  "checksPassed": 82,
+  "lastCommit": "AAA-02 frame loop hygiene"
 }

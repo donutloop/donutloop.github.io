@@ -15,9 +15,9 @@ import { ChunkManager } from './chunk_manager.js';
 import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget telemetry
 import { RoadGraph } from './road_graph.js'; // [NEW] implicit road-network graph
 import { Minimap } from './minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
+import { FrameLoop } from './loop.js'; // [AAA-02] frame loop hygiene
 
 let player;
-let prevTime = performance.now();
 let cubes = [];
 let score = 0;
 let scoreElement;
@@ -186,31 +186,29 @@ async function init() {
         verDiv.innerHTML = 'v6.4.2: Varied Cloud Sizes';
         document.body.appendChild(verDiv);
 
-        animate(() => {
-            const time = performance.now();
-            const delta = (time - prevTime) / 1000;
-            prevTime = time;
-
+        // [AAA-02] frame loop: exactly ONE update per frame, explicit clamped
+        // dt, and a frame budget that drops a frame when cost overshoots.
+        const loop = new FrameLoop({ maxDt: 0.1, budgetMs: 16.7 });
+        animate(loop, (dt) => {
             try {
                 if (chunkManager) {
-                    chunkManager.update();
-                    chunkManager.update();
+                    chunkManager.update();   // exactly ONE update per frame
                     // Update player colliders continuously as chunks load/unload
                     if (player) {
                         player.colliders = chunkManager.getColliders();
                     }
                 }
 
-                if (player) player.update(delta);
-                if (emergencySystem) emergencySystem.update(delta);
-                if (trafficSystem) trafficSystem.update(delta);
-                if (trafficLightSystem) trafficLightSystem.update(delta);
-                if (constructionSystem) constructionSystem.update(delta);
+                if (player) player.update(dt);
+                if (emergencySystem) emergencySystem.update(dt);
+                if (trafficSystem) trafficSystem.update(dt);
+                if (trafficLightSystem) trafficLightSystem.update(dt);
+                if (constructionSystem) constructionSystem.update(dt);
                 if (weatherSystem) {
                     const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
-                    weatherSystem.update(delta, playerPos);
-                } if (pedestrianSystem) pedestrianSystem.update(delta);
-                if (airplaneSystem) airplaneSystem.update(delta);
+                    weatherSystem.update(dt, playerPos);
+                } if (pedestrianSystem) pedestrianSystem.update(dt);
+                if (airplaneSystem) airplaneSystem.update(dt);
 
                 // [NEW] Round 9 — refresh minimap HUD from the live player position
                 if (minimap) {
@@ -219,7 +217,7 @@ async function init() {
                 }
 
                 // Update Effects
-                if (effectSystem) effectSystem.update(delta);
+                if (effectSystem) effectSystem.update(dt);
 
                 // [NEW] post-processing: bloom for neon districts + rain droplets.
                 // Update targets each frame from weather + neon district density,
@@ -246,7 +244,9 @@ async function init() {
                 }
 
                 // [NEW] record real frame budget each frame
-                telemetry.recordFrame(delta, renderer.info.render.calls, renderer.info.render.triangles);
+                telemetry.recordFrame(dt, renderer.info.render.calls, renderer.info.render.triangles);
+                // [AAA-02] expose the frame-loop budget (clamped dt / skips).
+                telemetry.recordBudget(loop.snapshot());
 
                 // [CI] Mark readiness once the first frame has actually drawn.
                 if (!window.__worldloop.ready) {
@@ -256,7 +256,7 @@ async function init() {
                     window.__worldloop.triangles = s.triangles;
                     window.__worldloop.ready = s.frames > 0 && s.drawCalls > 0;
                 }
-                teleTicker += delta;
+                teleTicker += dt;
                 if (teleTicker >= 0.5 && teleDiv) {
                     teleTicker = 0;
                     const s = telemetry.snapshot();

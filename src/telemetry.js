@@ -72,6 +72,18 @@ export class FrameBudgetTelemetry {
     return { frames, avgFrameMs, fps, elapsedMs };
   }
 
+  /**
+   * [AAA-02] Record the FrameLoop budget state each frame so the loop's
+   * clamped-dt / budget-skip behavior is machine-visible.
+   */
+  recordBudget(snap) {
+    this.loop = snap || null;
+    this.skippedFrames = snap ? snap.skipped : 0;
+    this.overBudgetFrames = snap ? snap.overBudget : 0;
+    this.clampedDts = snap ? snap.clamped : 0;
+    return this;
+  }
+
   snapshot() {
     return {
       frames: this.frames,
@@ -79,7 +91,11 @@ export class FrameBudgetTelemetry {
       fps: +this.lastFps.toFixed(2),
       drawCalls: this.drawCalls,
       instances: this.instances,
-      triangles: this.triangles
+      triangles: this.triangles,
+      loop: this.loop,
+      skippedFrames: this.skippedFrames,
+      overBudgetFrames: this.overBudgetFrames,
+      clampedDts: this.clampedDts
     };
   }
 }

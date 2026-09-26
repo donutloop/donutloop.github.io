@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
+# harness / session artifacts (not part of the city sim)
+auth.json
+models.json
+models-store.json
+sessions/
