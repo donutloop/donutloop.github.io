@@ -133,6 +133,10 @@ async function init() {
         // Weather
         weatherSystem = new WeatherSystem(scene, worldData.directionalLight, worldData.ambientLight, worldData.materials);
 
+        // [NEW] Weather-reactive driving — wire live weather into the player so
+        // rain/snow reduce tire grip (longer stopping distance, lower top speed).
+        player.weatherSystem = weatherSystem;
+
         // Airplanes
         airplaneSystem = new AirplaneSystem(scene, worldData.citySize);
         window.airplaneSystem = airplaneSystem; // Debug: Expose to console

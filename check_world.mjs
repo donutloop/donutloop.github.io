@@ -204,6 +204,28 @@ check('chunkManager.getColliders() is array', Array.isArray(colliders), 'count='
 // ---- 10. Player ----------------------------------------------------------------
 const player = new Player(cam, dom, colliders, traffic, parking, effects);
 check('player wired with colliders/traffic/parking', player.colliders instanceof Array);
+
+// ---- Weather-reactive driving (snow/rain reduce tire grip) --------------------
+// Deterministic grip model: dry = full grip, rain softens, snow softens most.
+player.weatherSystem = weather;
+weather.currentWeather = 'sunny';
+const dryMods = player.getDrivingModifiers();
+weather.currentWeather = 'rain';
+const rainMods = player.getDrivingModifiers();
+weather.currentWeather = 'snow';
+const snowMods = player.getDrivingModifiers();
+check('dry roads give full grip + dry friction',
+  dryMods.grip === 1.0 && dryMods.friction === 10, 'grip=' + dryMods.grip + ' friction=' + dryMods.friction);
+check('rain reduces grip -> lower friction + lower top speed',
+  rainMods.grip < dryMods.grip && rainMods.friction < dryMods.friction && rainMods.maxSpeedScale < 1,
+  'grip=' + rainMods.grip + ' friction=' + rainMods.friction + ' speed=' + rainMods.maxSpeedScale);
+check('snow reduces grip more than rain (harder to stop)',
+  snowMods.grip < rainMods.grip && snowMods.friction < rainMods.friction && snowMods.maxSpeedScale < rainMods.maxSpeedScale,
+  'grip=' + snowMods.grip + ' friction=' + snowMods.friction);
+check('driving modifiers deterministic for a given weather',
+  player.getDrivingModifiers().grip === player.getDrivingModifiers().grip, 'grip=' + player.getDrivingModifiers().grip);
+weather.currentWeather = 'sunny'; // reset for a clean deterministic report
+player.weatherSystem = weather;
 player.update(0.1);
 check('player.update(0.1) runs', true, 'ok');
 
@@ -308,7 +330,12 @@ const report = {
   systems: {
     world: { exports: ['createWorld', 'createCityChunk', 'createWastelandChunk'] },
     traffic: { exports: ['TrafficSystem'], speeds: speedMap },
-    weather: { exports: ['WeatherSystem'], day: weather.day },
+    weather: {
+      exports: ['WeatherSystem'],
+      day: weather.day,
+      current: weather.currentWeather,
+      driving: player.getDrivingModifiers()
+    },
     pedestrians: { exports: ['PedestrianSystem'] },
     parking: { exports: ['ParkingSystem'] },
     traffic_lights: { exports: ['TrafficLightSystem'] },

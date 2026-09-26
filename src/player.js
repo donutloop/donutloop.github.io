@@ -3,13 +3,14 @@ import { PointerLockControls } from 'three/addons/controls/PointerLockControls.j
 import { deformMesh } from './deformation.js';
 
 export class Player {
-    constructor(camera, domElement, colliders = [], trafficSystem = null, parkingSystem = null, effectSystem = null) {
+    constructor(camera, domElement, colliders = [], trafficSystem = null, parkingSystem = null, effectSystem = null, weatherSystem = null) {
         this.camera = camera;
         this.domElement = domElement;
         this.colliders = colliders;
         this.trafficSystem = trafficSystem;
         this.parkingSystem = parkingSystem;
         this.effectSystem = effectSystem;
+        this.weatherSystem = weatherSystem; // [NEW] weather-reactive driving
         this.controls = new PointerLockControls(camera, domElement);
 
         this.moveForward = false;
@@ -357,9 +358,12 @@ export class Player {
         if (!this.currentCar) return;
 
         const stats = this.getCarStats(this.currentCar.mesh.userData.type || 'sedan');
-        const maxSpeed = stats.maxSpeed;
-        const acceleration = stats.acceleration;
-        const friction = 10;
+        // [NEW] Weather-reactive driving — snow/rain reduce tire grip (longer
+        // stopping distance, lower top speed, softer acceleration).
+        const mods = this.getDrivingModifiers();
+        const maxSpeed = stats.maxSpeed * mods.maxSpeedScale;
+        const acceleration = stats.acceleration * mods.accelerationScale;
+        const friction = mods.friction;
         const turnSpeed = 2.0;
 
         // 0. Apply Crash Physics (Spin)
@@ -781,6 +785,34 @@ export class Player {
 
         return false;
     }
+    // [NEW] Weather-reactive driving — deterministic grip model read from the
+    // live WeatherSystem state so the browser path and check_world.mjs stay in
+    // sync. Rain/snow scale friction (stopping), top speed, and acceleration.
+    getDrivingModifiers() {
+        let grip = 1.0;
+        let maxSpeedScale = 1.0;
+        let accelerationScale = 1.0;
+        const weather = this.weatherSystem ? this.weatherSystem.currentWeather : 'sunny';
+
+        if (weather === 'rain') {
+            grip = 0.6;
+            maxSpeedScale = 0.8;
+            accelerationScale = 0.85;
+        } else if (weather === 'snow') {
+            grip = 0.35;
+            maxSpeedScale = 0.6;
+            accelerationScale = 0.7;
+        }
+
+        return {
+            weather,
+            grip,
+            friction: 10 * grip,
+            maxSpeedScale,
+            accelerationScale
+        };
+    }
+
     getCarStats(type) {
         switch (type) {
             case 'sport': return { maxSpeed: 60, acceleration: 40 };

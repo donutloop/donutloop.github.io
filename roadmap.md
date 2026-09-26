@@ -102,8 +102,11 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   over chunk coords (same world pos -> same district), draws a 160x160 canvas
   of the biome grid around the player, machine-readable in `check_world.mjs`
   (ADR 0016).
-- **⏳ PLANNED** Weather-reactive driving (snow/rain reduce friction; expose as
-  a `weather` field in `check_world.mjs` output).
+- **✅ DONE (Round 10)** Weather-reactive driving — snow/rain reduce tire grip
+  in the player car (longer stopping distance, lower top speed/acceleration) via
+  a deterministic `Player.getDrivingModifiers()` model; exposed as a
+  machine-readable `weather` field (`current` + `driving` mods) in
+  `check_world.mjs` output. ADR 0017.
 - **✅ DONE (Round 7 / Gap D)** Dynamic city events — emergency response &
   sirens. Added `src/emergency.js` `EmergencySystem` (pooled ambulance / fire /
   police fleet), new EMS vehicle builders in `car_models.js`, siren +

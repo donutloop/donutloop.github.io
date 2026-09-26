@@ -20,6 +20,7 @@
     *   Brick Apartments
     *   Cyberpunk Neon Towers
 *   **Dynamic Weather:** Switch between Sun, Rain, and Snow instantly.
+*   **Weather-Reactive Driving:** Rain and snow cut tire grip — longer stopping distance, lower top speed — so the world feels physically coherent.
 
 ## 🎮 How to Play
 1.  **Start:** Click anywhere to lock cursor and begin.
