@@ -1,0 +1,49 @@
+# build.yml — build & deploy pipeline for GitHub Pages.
+#
+# Worldloop's index.html loads the bundled app from ./dist/worldloop.js.
+# GitHub Pages only serves files that exist in the committed repo, so the
+# built bundle MUST be committed. This workflow rebuilds dist/worldloop.js on
+# every push to main and commits the fresh bundle back to main, so the
+# deployed site always matches the latest source.
+#
+# Loop safety: if the rebuild is byte-identical (esbuild is deterministic) no
+# commit/push happens, so the bot's own push does not re-trigger a rebuild.
+name: build-deploy
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Bundle
+        run: npm run build
+
+      - name: Commit fresh bundle back to main
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/worldloop.js
+          if git diff --quiet --cached; then
+            echo "dist/worldloop.js unchanged — nothing to commit"
+          else
+            git commit -m "build(ci): rebuild dist/worldloop.js for GitHub Pages"
+            git push origin HEAD
+            echo "pushed fresh bundle"
+          fi
