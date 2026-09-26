@@ -85,13 +85,13 @@ async function init() {
         emergencySystem = new EmergencySystem(scene, worldData.roadWidth, worldData.blockSize);
         emergencySystem.setEffects(effectSystem);
         window.emergencySystem = emergencySystem; // Machine-readable on the browser path
-        player.emergencySystem = emergencySystem; // Hook crashes -> dispatch response
         trafficSystem = new TrafficSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
         parkingSystem = new ParkingSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
         pedestrianSystem = new PedestrianSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
 
         // Create Player
         player = new Player(camera, document.body, [], null, null, effectSystem);
+        player.emergencySystem = emergencySystem; // Hook crashes -> dispatch response
 
         // Chunk Manager (Infinite World)
         // Pass systems so ChunkManager can trigger spawning per chunk
@@ -144,6 +144,11 @@ async function init() {
         // [NEW] Frame-budget telemetry (real FPS + draw calls from the renderer)
         telemetry = new FrameBudgetTelemetry();
         window.frameBudget = telemetry; // Machine-readable on the browser path too
+
+        // [CI] Self-describing ready signal for the headless smoke test. The CI
+        // driver polls window.__worldloop.ready; once a real frame has rendered
+        // with draw calls recorded, the browser path is provably alive.
+        window.__worldloop = { ready: false, drawCalls: 0, fps: 0, triangles: 0, errors: 0 };
 
         console.log('Game Initialized with Infinite World + Populated Chunks');
 
@@ -237,6 +242,15 @@ async function init() {
 
                 // [NEW] record real frame budget each frame
                 telemetry.recordFrame(delta, renderer.info.render.calls, renderer.info.render.triangles);
+
+                // [CI] Mark readiness once the first frame has actually drawn.
+                if (!window.__worldloop.ready) {
+                    const s = telemetry.snapshot();
+                    window.__worldloop.drawCalls = s.drawCalls;
+                    window.__worldloop.fps = s.fps;
+                    window.__worldloop.triangles = s.triangles;
+                    window.__worldloop.ready = s.frames > 0 && s.drawCalls > 0;
+                }
                 teleTicker += delta;
                 if (teleTicker >= 0.5 && teleDiv) {
                     teleTicker = 0;

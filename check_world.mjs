@@ -11,6 +11,7 @@
  * Exit:   0 if all checks pass, 1 otherwise.
  */
 import * as THREE from 'three';
+import { runHeadlessSmoke } from './tools/ci/headless_cdp.mjs';
 import { createWorld, createCityChunk, createWastelandChunk } from './src/world.js';
 import { TrafficSystem } from './src/traffic.js';
 import { WeatherSystem } from './src/weather.js';
@@ -31,6 +32,14 @@ import { Minimap, DISTRICT_PALETTE, BIOMES } from './src/minimap.js'; // [NEW] R
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
+
+// --- Machine-readable output guard ---
+// The systems under test log to console.log during the checks; that would
+// pollute the JSON report on stdout. Redirect module debug output to stderr
+// so stdout carries ONLY the report + summary.
+const origConsoleLog = console.log;
+console.log = (...a) => process.stderr.write(a.map((x) => String(x)).join(' ') + '\n');
+
 const checks = [];
 let failed = 0;
 
@@ -323,6 +332,31 @@ check('minimap 2d-draw disabled on Node but logic deterministic',
   'ctx=' + minimap.ctx + ' district=' + mmState.district);
 
 
+// ---- CI smoke: headless browser render assertion (--ci) -------------------------
+// Runs the structured checks above, then launches headless Chromium, loads
+// index.html, and asserts the browser path actually renders a frame with no
+// console errors. Gated on --ci so the fast path stays dependency-light.
+let ci = null;
+if (process.argv.includes('--ci')) {
+  let smoke;
+  try {
+    smoke = await runHeadlessSmoke({ timeoutMs: 40000 });
+    const errs = smoke.errors || [];
+    check('ci: browser page rendered a frame (drawCalls > 0)', smoke.ready && smoke.drawCalls > 0);
+    check('ci: WebGL canvas present', smoke.canvas);
+    check('ci: no console errors', errs.length === 0, JSON.stringify(errs.slice(0, 3)));
+    check('ci: no uncaught exceptions', (smoke.exceptions || []).length === 0, JSON.stringify(smoke.exceptions.slice(0, 3)));
+    ci = {
+      ready: smoke.ready, drawCalls: smoke.drawCalls, fps: smoke.fps,
+      triangles: smoke.triangles, canvas: smoke.canvas,
+      consoleErrors: errs, exceptions: smoke.exceptions || []
+    };
+  } catch (e) {
+    check('ci: headless smoke completed without driver error', false, 'driver error: ' + e.message);
+    ci = { driverError: String(e.message) };
+  }
+}
+
 // ---- Emit machine-readable JSON ------------------------------------------------
 const report = {
   tool: 'check_world',
@@ -362,13 +396,14 @@ const report = {
     instances
   },
   checks,
+  ci,
   summary: { passed: checks.length - failed, failed, total: checks.length },
   passed: failed === 0
 };
 
-console.log(JSON.stringify(report, null, 2));
+origConsoleLog(JSON.stringify(report, null, 2));
 if (failed > 0) {
   console.error(`\ncheck_world: ${failed} check(s) FAILED`);
   process.exit(1);
 }
-console.log(`\ncheck_world: ${checks.length - failed}/${checks.length} checks passed ✅`);
+process.stderr.write(`check_world: ${checks.length - failed}/${checks.length} checks passed ✅\n`);

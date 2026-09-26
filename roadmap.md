@@ -120,8 +120,11 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - `check_world.mjs` structured verification ✅ DONE
 - `docs/adr/` accepted-decision log ✅ DONE
 - `tools/pi-loop/` agent loop ✅ DONE
-- **⏳ PLANNED** CI smoke — `node check_world.mjs` + a headless browser render
-  assertion on every commit (one `check_world.mjs --ci` mode).
+- **✅ DONE (Round 11)** CI smoke — `node check_world.mjs --ci` runs the
+  structured checks PLUS a headless browser render assertion (dependency-free
+  CDP driver `tools/ci/headless_cdp.mjs`, self-describing `window.__worldloop`
+  ready signal in `src/main.js`). ADR 0018. It caught a browser-only ordering
+  bug (`emergencySystem` wired before `Player` existed).
 
 ## Gaps & notes (for the next cycle)
 
