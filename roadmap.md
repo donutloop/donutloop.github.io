@@ -208,7 +208,7 @@ Each item ships green: `check_world.mjs` passes, browser render clean, one commi
 
 - **✅ DONE (AAA-05) `core/app.js` state machine** — boot/loading/menu/playing/paused/gameover; owns the pause hook (frozen states pause the sim clock, playing resumes); deterministic transition log + `snapshot()`; P key routes through `app.togglePause()`. `src/core/app.js`, wired into main.js, check_world.mjs asserts flow/clock/pause. *(ADR 0023)* M
 - **✅ DONE (AAA-06)** `src/input/` logical ActionMap + keyboard/mouse/touch/gamepad adapters + InputManager (held actions + one-shot edge-triggered events). `player.js` consumes the InputManager and owns no raw DOM key/mouse input bindings; click-to-play overlay + pause key moved into the input module; main.js wires pause->App.togglePause and lock->Player. *(ADR 0023)* M
-- **AAA-07** `core/settings.js`: quality tiers, control remap, audio; persisted to localStorage. *(ADR 0023)* M
+- **✅ DONE (AAA-07)** `core/settings.js`: quality tiers (`low/medium/high/ultra` → pixel-ratio cap, draw-distance scale, postFx flag), control remap persisted + rehydrated into the InputManager ActionMap, audio prefs; JSON persistence via a Node-safe localStorage shim; `main.js` wires it as the single source of truth (renderer cap, chunk radius, input remap). *(ADR 0027)* M
 - **AAA-08** `core/save.js`: serialize seed + player state + progress; replay-safe. *(ADR 0022/0023)* L
 
 ## Phase 10 — world scale & spatial

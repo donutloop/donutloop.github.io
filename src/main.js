@@ -20,6 +20,8 @@ import { FixedTimestep } from './core/time.js'; // [AAA-04] fixed-timestep core
 import { App, APP_STATES } from './core/app.js'; // [AAA-05] App state machine
 import { setSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
 import { InputManager } from './input/index.js'; // [AAA-06] unified logical input
+import { ActionMap } from './input/action_map.js'; // [AAA-06] action->code map
+import { Settings, createStorage } from './core/settings.js'; // [AAA-07] persisted settings (quality/remap/audio)
 
 let player;
 let cubes = [];
@@ -74,6 +76,14 @@ async function init() {
     try {
         const { scene, camera, renderer } = initScene();
 
+        // [AAA-07] Persisted settings (quality tiers / control remap / audio)
+        // loaded from localStorage (Node-safe shim in core/settings.js). The
+        // settings object is exposed on window for the UI/settings menu and is
+        // the source of truth for the renderer cap + input remap below.
+        const settings = new Settings({ storage: createStorage() });
+        window.settings = settings;
+        renderer.setPixelRatio(settings.pixelRatioCap()); // quality-tier pixel-ratio cap
+
         // Create World (Just lighting and metadata now)
         const worldData = await createWorld(scene);
 
@@ -104,7 +114,12 @@ async function init() {
         // [AAA-06] Unified input manager: keyboard/mouse/touch/gamepad -> logical actions.
         // Pause/lock one-shots are wired to App/Player below; held move actions are
         // consumed by Player.update(). Player owns no raw DOM input bindings anymore.
-        const inputManager = new InputManager({ dom: document.body });
+        // [AAA-07] Rehydrate the logical action map from persisted settings so
+        // a player's control remap survives reload (fallback = default bindings).
+        const inputManager = new InputManager({
+            dom: document.body,
+            map: new ActionMap(settings.bindings)
+        });
         player = new Player(camera, document.body, [], null, null, effectSystem, null, inputManager);
         player.emergencySystem = emergencySystem; // Hook crashes -> dispatch response
 
@@ -121,6 +136,12 @@ async function init() {
             constructionSystem
         );
         chunkManager.update(); // Initial load
+
+        // [AAA-07] Apply the quality tier's streaming-radius scale so low/medium
+        // tiers stream fewer chunks (and render faster) than high/ultra.
+        chunkManager.renderDistance = Math.max(
+            1, Math.round(chunkManager.renderDistance * settings.drawDistanceScale())
+        );
 
         // Update player colliders immediately
         player.colliders = chunkManager.getColliders();

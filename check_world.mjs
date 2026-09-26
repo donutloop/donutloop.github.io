@@ -310,6 +310,50 @@ player.weatherSystem = weather;
     check('AAA-06: re-press after release fires again', im.drain().includes('enterExit'), 'ok');
     check('AAA-06: InputManager snapshot includes map+actions', !!im.snapshot().map && !!im.snapshot().actions, 'ok');
     check('AAA-06: player consumes InputManager (no raw DOM key handlers)', player.input instanceof InputManager, 'input=' + (player.input && player.input.constructor && player.input.constructor.name));
+
+    // ---- [AAA-07] persisted settings (quality tiers / control remap / audio) ----
+    // Node-safe: no browser localStorage, so the memory shim must round-trip.
+    const memStorage = createStorage();
+    const s = new Settings({ storage: memStorage, key: 'worldloop.settings.test' });
+    check('AAA-07: Settings builds over memory storage shim', s.quality === QUALITY_TIERS.HIGH, 'quality=' + s.quality);
+    check('AAA-07: default audio prefs', s.audio.muted === false && s.audio.master === 1.0, 'audio=' + JSON.stringify(s.audio));
+    check('AAA-07: default bindings match ActionMap defaults', s.bindings === DEFAULT_SETTINGS.input.bindings, 'bindings present');
+    check('AAA-07: QUALITY_PARAMS covers every tier', Object.values(QUALITY_TIERS).every(t => QUALITY_PARAMS[t]), 'tiers=' + Object.keys(QUALITY_PARAMS).join(','));
+
+    // Quality tier -> pixel-ratio cap / draw-distance scale / postFx.
+    s.setQuality(QUALITY_TIERS.LOW);
+    check('AAA-07: setQuality persists low tier', s.quality === QUALITY_TIERS.LOW && s.pixelRatioCap() === 1.0, 'cap=' + s.pixelRatioCap());
+    s.setQuality(QUALITY_TIERS.ULTRA);
+    check('AAA-07: ultra tier raises pixel-ratio cap', s.pixelRatioCap() > 2.0 && s.postFxEnabled(), 'cap=' + s.pixelRatioCap());
+    s.setQuality('bogus-tier');
+    check('AAA-07: invalid tier falls back to HIGH', s.quality === QUALITY_TIERS.HIGH, 'quality=' + s.quality);
+
+    // Control remap round-trips through storage.
+    s.setBindings({ moveForward: ['KeyW', 'ArrowUp'], enterExit: ['KeyF'] });
+    s.save();
+    const s2 = new Settings({ storage: memStorage, key: 'worldloop.settings.test' });
+    check('AAA-07: control remap persists across save/load', s2.bindings.moveForward[0] === 'KeyW' && s2.bindings.enterExit[0] === 'KeyF', 'bindings=' + JSON.stringify(s2.bindings));
+
+    // Audio prefs merge + persist.
+    s2.setAudio({ muted: true, sfx: 0.5 });
+    const s3 = new Settings({ storage: memStorage, key: 'worldloop.settings.test' });
+    check('AAA-07: audio prefs persist', s3.audio.muted === true && s3.audio.sfx === 0.5, 'audio=' + JSON.stringify(s3.audio));
+
+    // A remapped ActionMap rehydrates from settings bindings.
+    const remapped = new ActionMap(s3.bindings);
+    check('AAA-07: ActionMap rehydrates from saved bindings', remapped.codesFor('moveForward').includes('KeyW'), 'codes=' + remapped.codesFor('moveForward'));
+
+    // Machine-readable snapshot.
+    const settingsSnap = s3.snapshot();
+    check('AAA-07: snapshot exposes quality/audio/input', settingsSnap.quality && settingsSnap.audio && settingsSnap.input && typeof settingsSnap.dirty === 'boolean', 'keys=' + Object.keys(settingsSnap).join(','));
+
+    // main.js wiring: the input layer rehydrates its logical map from the
+    // persisted bindings (Node-safe: no DOM/window needed here).
+    const wiredIM = new InputManager({ map: new ActionMap(s3.bindings) });
+    check('AAA-07: main.js wiring rehydrates InputManager from persisted bindings',
+      wiredIM.map instanceof ActionMap && wiredIM.map.codesFor('moveForward').includes('KeyW'),
+      'codes=' + wiredIM.map.codesFor('moveForward'));
+
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------
@@ -588,6 +632,7 @@ check('minimap 2d-draw disabled on Node but logic deterministic',
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { ActionMap, DEFAULT_BINDINGS, InputManager, KeyboardAdapter, ACTIONS } from './src/input/index.js'; // [AAA-06] logical input
+import { Settings, QUALITY_TIERS, QUALITY_PARAMS, DEFAULT_SETTINGS, createStorage } from './src/core/settings.js'; // [AAA-07] persisted settings
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 check('ADR 0021: three is a pinned (exact) devDependency',
   pkg.devDependencies && pkg.devDependencies.three === '0.160.0',
