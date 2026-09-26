@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+import { SimplexNoise } from './noise.js';
 
 // --- GEOMETRY UTILS ---
 
@@ -317,6 +318,7 @@ function addRooftopDetails(x, z, w, h, d, geoms) {
 export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) {
     const chunkGroup = new THREE.Group();
     const colliders = [];
+    const construction = [];
     const bulbGeoms = []; // streetlight bulbs — function scope so LOD merge can skip empty arrays
     const isLOD = lodLevel > 0; // far chunks: low-poly instanced silhouettes, no foliage/lights
 
@@ -363,7 +365,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
         { x: offset, z: offset }, { x: -offset, z: offset }
     ];
 
-    corners.forEach(Corner => {
+    corners.forEach((Corner, cornerIndex) => {
         const cx = xPos + Corner.x;
         const cz = zPos + Corner.z;
 
@@ -382,7 +384,13 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
                 box3.max.set(cx + bw / 2, bh, cz + bw / 2);
                 colliders.push(box3);
             }
-        } else if (Math.random() > 0.1) {
+        } else {
+            const siteNoise = SimplexNoise.noise2D(cx * 0.05, cz * 0.05);
+            const isConstruction = siteNoise > 0.55 || (xPos === 0 && zPos === 0 && cornerIndex === 0);
+            if (isConstruction) {
+                const site = buildConstructionSite(chunkGroup, chunkGeoms, colliders, cx, cz, cornerSize);
+                if (site) construction.push(site);
+            } else if (Math.random() > 0.1) {
             const margin = 12;
             const bw = cornerSize - margin;
 
@@ -407,6 +415,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
                 box3.max.set(cx + bw / 2, bh, cz + bw / 2);
                 colliders.push(box3);
             }
+        }
         }
     });
 
@@ -514,7 +523,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
 
 
 
-    return { mesh: chunkGroup, colliders: colliders, lodLevel: lodLevel };
+    return { mesh: chunkGroup, colliders: colliders, lodLevel: lodLevel, construction: construction };
 }
 
 
@@ -569,6 +578,62 @@ export function createWastelandChunk(xPos, zPos, size) {
     ground.receiveShadow = true;
     chunkGroup.add(ground);
     return { mesh: chunkGroup, colliders: colliders };
+}
+
+
+/**
+ * buildConstructionSite — turns one corner lot into an active construction site:
+ * a partially-built concrete core, a dark-metal scaffolding frame around it, and
+ * a tower crane (mast + rotating jib + counterweight + hoisted hook block). The
+ * crane is a regular (non-instanced) mesh so ConstructionSystem can animate it.
+ * Returns an animation record, or null if the lot is skipped.
+ */
+function buildConstructionSite(group, chunkGeoms, colliders, cx, cz, cornerSize) {
+    const half = cornerSize / 2;
+    // Partially-built concrete core: a few floors, not yet topped out.
+    const coreH = 5 + Math.random() * 4;
+    chunkGeoms.concrete.push(box(coreH * 0.9, coreH, coreH * 0.9, cx, coreH / 2, cz));
+    // Scaffolding: thin dark-metal posts on the four corners of the footprint.
+    const scafH = coreH + 3;
+    const p = half * 0.8;
+    chunkGeoms.darkMetal.push(box(0.15, scafH, 0.15, cx - p, scafH / 2, cz - p));
+    chunkGeoms.darkMetal.push(box(0.15, scafH, 0.15, cx + p, scafH / 2, cz - p));
+    chunkGeoms.darkMetal.push(box(0.15, scafH, 0.15, cx + p, scafH / 2, cz + p));
+    chunkGeoms.darkMetal.push(box(0.15, scafH, 0.15, cx - p, scafH / 2, cz + p));
+    // Collider so traffic avoids the fenced site.
+    colliders.push(new THREE.Box3().set(
+        new THREE.Vector3(cx - half, 0, cz - half),
+        new THREE.Vector3(cx + half, coreH, cz + half)
+    ));
+
+    // Tower crane — animated by ConstructionSystem.
+    const H = 34;
+    const jibLen = half * 1.6;
+    const mastX = cx - half * 0.5;
+    const mastZ = cz - half * 0.5;
+    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.35, H, 0.35), matDarkMetal);
+    mast.position.set(mastX, H / 2, mastZ);
+    const pivot = new THREE.Object3D();
+    pivot.position.set(mastX, H, mastZ);
+    const jib = new THREE.Mesh(new THREE.BoxGeometry(jibLen, 0.25, 0.25), matMetal);
+    jib.position.set(jibLen / 2, 0, 0);
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(jibLen * 0.35, 0.25, 0.25), matMetal);
+    counter.position.set(-jibLen * 0.35 / 2, 0, 0);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), matDarkMetal);
+    cap.position.set(0, 0.4, 0);
+    const cw = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), matDarkMetal);
+    cw.position.set(-jibLen * 0.35, 0.1, 0);
+    // Hook block hangs below the jib; its X slides along the jib and its Y hoists.
+    const hook = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.35, 0.4), matMetal);
+    // Cable stub (thin vertical box, stretched each frame by ConstructionSystem).
+    const cable = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1, 0.05), matDarkMetal);
+    cable.position.set(0, -1.5, 0);
+
+    pivot.add(jib); pivot.add(counter); pivot.add(cap); pivot.add(cw);
+    pivot.add(cable); pivot.add(hook);
+    group.add(mast); group.add(pivot);
+
+    return { pivot, hook, cable, jibLen, phase: 0, cx, cz };
 }
 
 export async function createWorld(scene) {

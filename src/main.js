@@ -3,7 +3,8 @@ import { initScene, animate } from './scene.js';
 import { createWorld } from './world.js';
 import { Player } from './player.js';
 import { TrafficSystem } from './traffic.js';
-import { EmergencySystem } from './emergency.js'; // [NEW] Gap D — emergency response
+import { EmergencySystem } from './emergency.js';
+import { ConstructionSystem } from './construction.js'; // [NEW] Gap D — emergency response
 import { WeatherSystem } from './weather.js';
 import { PedestrianSystem } from './pedestrians.js';
 import { ParkingSystem } from './parking.js';
@@ -80,6 +81,7 @@ async function init() {
 
         // Initialize Systems
         trafficLightSystem = new TrafficLightSystem(scene, worldData.roadWidth, worldData.blockSize);
+        constructionSystem = new ConstructionSystem(scene);
 
         // [NEW] Gap D — dynamic city events: emergency response & sirens.
         emergencySystem = new EmergencySystem(scene, worldData.roadWidth, worldData.blockSize);
@@ -102,7 +104,8 @@ async function init() {
             trafficSystem,
             parkingSystem,
             pedestrianSystem,
-            trafficLightSystem
+            trafficLightSystem,
+            constructionSystem
         );
         chunkManager.update(); // Initial load
 
@@ -201,6 +204,7 @@ async function init() {
                 if (emergencySystem) emergencySystem.update(delta);
                 if (trafficSystem) trafficSystem.update(delta);
                 if (trafficLightSystem) trafficLightSystem.update(delta);
+                if (constructionSystem) constructionSystem.update(delta);
                 if (weatherSystem) {
                     const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
                     weatherSystem.update(delta, playerPos);

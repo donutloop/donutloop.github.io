@@ -154,6 +154,23 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   This is the agent loop's deterministic surface/feature verification gate.
 - Every feature must keep both paths green: browser render + `check_world.mjs`.
 
+
+## Phase 6 — living skyline (active construction sites)
+
+- New `src/construction.js` `ConstructionSystem` — animates tower cranes at active construction sites.
+- `world.js` `createCityChunk` now deterministically turns some corner lots into construction sites:
+  a partially-built concrete core, dark-metal scaffolding frame, and a tower crane (mast + rotating
+  jib + counterweight + hoisted hook block + cable). The origin chunk always carries one crane so
+  verification is deterministic.
+- Cranes are regular (non-instanced) meshes so `ConstructionSystem.update(delta)` can swing the jib
+  (phase advances by `delta * SPEED`) and hoist the hook block; the animation is reproducible.
+- Wired into `ChunkManager.loadChunk/unloadChunk` (via `chunkData.construction`) and `main.js`
+  (`constructionSystem.update(delta)` in the animate loop).
+- Verified in `check_world.mjs`: origin chunk carries a crane, `craneCount()` matches loaded sites,
+  jib rotation advances by `delta * SPEED`, and `main.js` wires `ConstructionSystem`.
+- ADR-0019 documents the decision (deterministic construction placement + animated crane system).
+
+
 ## Definition of done
 
 A feature is ✅ DONE only when: it ships as one commit; the browser renders it

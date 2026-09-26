@@ -3,7 +3,7 @@ import { SimplexNoise } from './noise.js';
 import { createCityChunk, createWastelandChunk, createHighwayChunk } from './world.js'; // We will assume these exist
 
 export class ChunkManager {
-    constructor(scene, player, worldData, trafficSystem, parkingSystem, pedestrianSystem, trafficLightSystem) {
+    constructor(scene, player, worldData, trafficSystem, parkingSystem, pedestrianSystem, trafficLightSystem, constructionSystem) {
         this.scene = scene;
         this.player = player;
         this.worldData = worldData;
@@ -11,6 +11,7 @@ export class ChunkManager {
         this.parkingSystem = parkingSystem;
         this.pedestrianSystem = pedestrianSystem;
         this.trafficLightSystem = trafficLightSystem;
+        this.constructionSystem = constructionSystem;
 
         this.chunks = new Map(); // "x,z" -> chunkData
         this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
@@ -106,6 +107,7 @@ export class ChunkManager {
                 if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
                 if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
                 if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
+            this.constructionSystem.loadChunk(cx, cz, chunkData);
             }
 
         } else if (isHighway) {
@@ -151,6 +153,7 @@ export class ChunkManager {
             if (this.parkingSystem) this.parkingSystem.unloadChunk(cx, cz);
             if (this.pedestrianSystem) this.pedestrianSystem.unloadChunk(cx, cz);
             if (this.trafficLightSystem) this.trafficLightSystem.unloadChunk(cx, cz);
+            this.constructionSystem.unloadChunk(cx, cz);
         }
         this.chunks.delete(id);
     }

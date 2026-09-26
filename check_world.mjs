@@ -27,6 +27,7 @@ import { SimplexNoise } from './src/noise.js';
 import { FrameBudgetTelemetry } from './src/telemetry.js';
 import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
 import { EmergencySystem } from './src/emergency.js';
+import { ConstructionSystem } from './src/construction.js';
 import { PostProcessingPipeline } from './src/effects.js'; // [NEW] post-processing pipeline // [NEW] Gap D — emergency response
 import { Minimap, DISTRICT_PALETTE, BIOMES } from './src/minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 import fs from 'node:fs';
@@ -93,7 +94,8 @@ const effects = new EffectSystem(scene);
 const trafficLights = new TrafficLightSystem(scene, world.roadWidth, world.blockSize);
     const emergency = new EmergencySystem(scene, world.roadWidth, world.blockSize); // Gap D
     emergency.setEffects(effects);
-const chunkManager = new ChunkManager(scene, null, world, traffic, parking, pedestrians, trafficLights);
+const construction = new ConstructionSystem(scene);
+const chunkManager = new ChunkManager(scene, null, world, traffic, parking, pedestrians, trafficLights, construction);
 
 // ---- 1. World surface -----------------------------------------------------
 const worldKeys = ['roadWidth', 'blockSize', 'citySize', 'directionalLight', 'ambientLight', 'materials'];
@@ -115,6 +117,28 @@ const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
   check('world.createCityChunk -> LOD is lighter than full detail (fewer meshes)', lodChunk.mesh.children.length < fullDetail.mesh.children.length,
     'full=' + fullDetail.mesh.children.length + ' lod=' + lodChunk.mesh.children.length);
   check('world.createCityChunk -> LOD omits streetlight bulbs', ![...lodChunk.mesh.children].some(c => c.isMesh && c.material && c.material.color && c.material.color.getHex && c.material.color.getHex() === 0xffffaa), 'no bulb meshes');
+
+  // ---- Construction sites: origin chunk always carries a tower crane ----
+  check('world.createCityChunk -> origin chunk carries construction sites',
+    fullDetail.construction && fullDetail.construction.length > 0,
+    'construction=' + (fullDetail.construction ? fullDetail.construction.length : 0));
+  const constructionSys = new ConstructionSystem(scene);
+  constructionSys.loadChunk(0, 0, fullDetail);
+  check('construction.craneCount -> origin chunk loads a crane',
+    constructionSys.craneCount() === fullDetail.construction.length,
+    'cranes=' + constructionSys.craneCount());
+  if (constructionSys.craneCount() > 0) {
+    const c = constructionSys.cranes[0];
+    const r0 = c.pivot.rotation.y;
+    const p0 = c.phase;
+    constructionSys.update(0.5);
+    const r1 = c.pivot.rotation.y;
+    const p1 = c.phase;
+    check('construction.update -> jib rotation advances by delta*SPEED',
+      Math.abs((r1 - r0) - 0.5 * constructionSys.SPEED) < 1e-6 &&
+      Math.abs((p1 - p0) - 0.5 * constructionSys.SPEED) < 1e-6,
+      'dRot=' + (r1 - r0).toFixed(4));
+  }
   check('ChunkManager -> lodDistance detail radius', chunkManager.lodDistance >= 1, 'lodDistance=' + chunkManager.lodDistance);
 check('world.createCityChunk -> {mesh,colliders}', cityChunk.mesh instanceof THREE.Group && Array.isArray(cityChunk.colliders));
 check('world.createWastelandChunk -> {mesh,colliders}', wasteChunk.mesh instanceof THREE.Group && Array.isArray(wasteChunk.colliders));
@@ -255,6 +279,8 @@ const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSyste
 check('main.js wires all systems', wired, 'symbols checked');
 check('main.js passes pedestrianSystem to traffic.setDependencies', mainSrc.includes('pedestrianSystem)'), '5th dep wired');
         check('main.js wires EmergencySystem -> emergency response', mainSrc.includes('EmergencySystem') && mainSrc.includes('emergencySystem.update(delta)'));
+  check('main.js wires ConstructionSystem -> animated cranes', mainSrc.includes('ConstructionSystem') && mainSrc.includes('constructionSystem.update(delta)'));
+
         check('main.js hooks player crashes -> emergency.respond', mainSrc.includes('player.emergencySystem'));
         check('main.js passes emergencySystem to traffic.setDependencies', mainSrc.includes('roadGraph, emergencySystem'));
 check('main.js wires FrameBudgetTelemetry', mainSrc.includes('FrameBudgetTelemetry') && mainSrc.includes('recordFrame'), 'telemetry wired');
