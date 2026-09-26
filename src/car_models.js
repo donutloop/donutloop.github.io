@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 
 // --- MATERIALS ---
-const matBody = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.7, envMapIntensity: 1.0 }); // Dynamic Color
-const matGlass = new THREE.MeshStandardMaterial({ color: 0x112233, roughness: 0.1, metalness: 0.9, envMapIntensity: 1.0 });
+const matBody = new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0.25, envMapIntensity: 0.6 }); // Dynamic Color
+const matGlass = new THREE.MeshStandardMaterial({ color: 0x112233, roughness: 0.5, metalness: 0.1, envMapIntensity: 0.4 });
 const matRubber = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9, metalness: 0.1 });
 const matRim = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2, metalness: 0.8 });
-const matChrome = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.9 });
+const matChrome = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.55 });
 const matPlastic = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
 const matLightFront = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffeeaa, emissiveIntensity: 2.0 });
 const matLightRear = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff0000, emissiveIntensity: 2.0 });
