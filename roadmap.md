@@ -206,7 +206,7 @@ Each item ships green: `check_world.mjs` passes, browser render clean, one commi
 
 ## Phase 9 — state machine, input, persistence
 
-- **AAA-05** `core/app.js` state machine: boot/loading/menu/playing/paused/gameover; pause hook. *(ADR 0023)* M
+- **✅ DONE (AAA-05) `core/app.js` state machine** — boot/loading/menu/playing/paused/gameover; owns the pause hook (frozen states pause the sim clock, playing resumes); deterministic transition log + `snapshot()`; P key routes through `app.togglePause()`. `src/core/app.js`, wired into main.js, check_world.mjs asserts flow/clock/pause. *(ADR 0023)* M
 - **AAA-06** `input/` action-map + keyboard/mouse/touch/gamepad adapters; strip raw DOM bindings from `player.js`. *(ADR 0023)* M
 - **AAA-07** `core/settings.js`: quality tiers, control remap, audio; persisted to localStorage. *(ADR 0023)* M
 - **AAA-08** `core/save.js`: serialize seed + player state + progress; replay-safe. *(ADR 0022/0023)* L

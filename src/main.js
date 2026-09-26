@@ -17,6 +17,7 @@ import { RoadGraph } from './road_graph.js'; // [NEW] implicit road-network grap
 import { Minimap } from './minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 import { FrameLoop } from './loop.js'; // [AAA-02] frame loop hygiene
 import { FixedTimestep } from './core/time.js'; // [AAA-04] fixed-timestep core
+import { App, APP_STATES } from './core/app.js'; // [AAA-05] App state machine
 import { setSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
 
 let player;
@@ -197,12 +198,21 @@ async function init() {
         const loop = new FrameLoop({ maxDt: 0.1, budgetMs: 16.7 });
         // [AAA-04] Fixed-timestep core (ADR 0022): sim systems advance at a
         // constant 30Hz regardless of display refresh; render happens once per
-        // frame. P key toggles pause/resume.
+        // frame. P key toggles pause/resume through the App state machine.
         const simClock = new FixedTimestep({ fixedDt: 1 / 30, maxStepsPerFrame: 4 });
+        // [AAA-05] App state machine owns the pause hook and lifecycle flow:
+        // boot → loading → playing (menu UI lands in AAA-15).
+        const app = new App({ clock: simClock });
+        window.__worldloop.app = app;
+        app.transition(APP_STATES.LOADING, 'init');
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'p' || e.key === 'P') simClock.toggle();
+            if (e.key === 'p' || e.key === 'P') app.togglePause();
         });
         window.__worldloop.simClock = simClock;
+
+        // [AAA-05] World + systems are wired: enter the playing state, which
+        // resumes the sim clock (frozen during boot/loading).
+        app.transition(APP_STATES.PLAYING, 'ready');
 
         animate(loop, (dt) => {
             try {

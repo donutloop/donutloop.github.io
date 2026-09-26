@@ -123,7 +123,7 @@ below keeps the current `check_world.mjs` green and the browser render clean.
 ### Phase 9 — State machine, input, persistence (runnable, playable)
 | ID | Task | Files | Dep | Complexity |
 |---|---|---|---|---|
-| AAA-05 | `App` state machine (boot/loading/menu/playing/paused/gameover) + pause | `core/app.js`, `main.js` | AAA-04 | M |
+| AAA-05 | ✅ DONE — `App` state machine (boot/loading/menu/playing/paused/gameover) + pause hook. `src/core/app.js`; frozen states pause the sim clock, playing resumes; deterministic transition log + `snapshot()`; P key routes through `app.togglePause()`; wired into main.js (boot→loading→playing); check_world.mjs asserts flow/clock/pause. | `core/app.js`, `main.js` | AAA-04 | M |
 | AAA-06 | Input abstraction: action-map + keyboard/mouse/touch/gamepad adapters; remove raw DOM bindings | `input/*`, `player.js` | AAA-05 | M |
 | AAA-07 | Settings (quality tiers, controls remap, audio) persisted to localStorage | `core/settings.js`, `ui/settings.js` | AAA-05,06 | M |
 | AAA-08 | Save/load: serialize world seed, player state, progress; replay-safe | `core/save.js`, `core/rng.js` | AAA-03,07 | L |

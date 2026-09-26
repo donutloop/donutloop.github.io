@@ -361,6 +361,7 @@ check('AAA-02: frame budget drops frames when update cost overshoots',
   'skipped=' + slowRes.skipped + ' overBudget=' + slowLoop.overBudget);
 // ---- AAA-04: fixed-timestep core (ADR 0022) ----------------------------------
 import { FixedTimestep, FIXED_DT, MAX_STEPS_PER_FRAME } from './src/core/time.js';
+import { App, APP_STATES, isValidAppState } from './src/core/app.js'; // [AAA-05] App state machine
 const clockProbe = new FixedTimestep({ fixedDt: 1 / 30, maxStepsPerFrame: 4 });
 let clockUpdates = 0, clockRenders = 0;
 // 100ms real frame -> 3 fixed steps (100ms / 33.3ms = 3), exactly 1 render.
@@ -413,6 +414,75 @@ check('AAA-04: main.js advances a fixed-timestep clock and records its budget',
 check('AAA-04: fixed step is 30Hz and budget clamp is 4 steps/frame',
   FIXED_DT === 1 / 30 && MAX_STEPS_PER_FRAME === 4,
   'FIXED_DT=' + FIXED_DT + ' MAX=' + MAX_STEPS_PER_FRAME);
+
+// ---- AAA-05: App state machine (ADR 0023) -----------------------------------
+const appClock = new FixedTimestep({ fixedDt: 1 / 30, maxStepsPerFrame: 4 });
+const app = new App({ clock: appClock });
+check('AAA-05: App starts in BOOT state',
+  app.state === APP_STATES.BOOT && app.isFrozen === true,
+  'state=' + app.state + ' frozen=' + app.isFrozen);
+
+// Invalid state transitions must throw.
+let threw = false;
+try { app.transition('not-a-state'); } catch (e) { threw = true; }
+check('AAA-05: invalid state transition throws',
+  threw && app.state === APP_STATES.BOOT && app.transitions === 0,
+  'threw=' + threw + ' transitions=' + app.transitions);
+
+// Lifecycle flow: boot -> loading -> playing. Loading freezes the clock.
+app.transition(APP_STATES.LOADING, 'init');
+check('AAA-05: loading state freezes the sim clock',
+  app.state === APP_STATES.LOADING && app.clock.paused === true,
+  'state=' + app.state + ' clockPaused=' + app.clock.paused);
+
+// Entering playing resumes the clock.
+app.transition(APP_STATES.PLAYING, 'ready');
+check('AAA-05: playing state resumes the sim clock',
+  app.state === APP_STATES.PLAYING && app.clock.paused === false && app.isPlaying,
+  'state=' + app.state + ' clockPaused=' + app.clock.paused);
+
+// Pause hook (P key): playing -> paused freezes the clock.
+app.togglePause();
+check('AAA-05: togglePause playing -> paused freezes clock',
+  app.state === APP_STATES.PAUSED && app.clock.paused === true && app.isPaused,
+  'state=' + app.state + ' clockPaused=' + app.clock.paused);
+
+// togglePause resumes back to playing.
+app.togglePause();
+check('AAA-05: togglePause paused -> playing resumes clock',
+  app.state === APP_STATES.PLAYING && app.clock.paused === false && app.isPlaying,
+  'state=' + app.state + ' clockPaused=' + app.clock.paused);
+
+// gameover freezes the clock.
+app.transition(APP_STATES.GAMEOVER, 'crash');
+check('AAA-05: gameover freezes the sim clock',
+  app.state === APP_STATES.GAMEOVER && app.clock.paused === true,
+  'state=' + app.state + ' clockPaused=' + app.clock.paused);
+
+// No-op transition is recorded but not counted.
+const before = app.transitions;
+app.transition(APP_STATES.GAMEOVER, 'no-op');
+check('AAA-05: no-op transition recorded but not counted',
+  app.transitions === before && app.history[app.history.length - 1].to === APP_STATES.GAMEOVER,
+  'transitions=' + app.transitions + ' last=' + app.history[app.history.length - 1].to);
+
+// Pause request outside a pauseable state is ignored (recorded no-op).
+app.togglePause();
+check('AAA-05: togglePause in gameover is ignored (state unchanged)',
+  app.state === APP_STATES.GAMEOVER && app.transitions === before,
+  'state=' + app.state + ' transitions=' + app.transitions);
+
+// Snapshot is machine-readable.
+const snap = app.snapshot();
+check('AAA-05: snapshot exposes state/clock/history',
+  snap.state === APP_STATES.GAMEOVER && snap.clockPaused === true && Array.isArray(snap.history) && snap.history.length > 0,
+  'state=' + snap.state + ' clockPaused=' + snap.clockPaused + ' history=' + snap.history.length);
+
+// main.js wires the App and owns the pause hook.
+const appMainSrc = fs.readFileSync('src/main.js', 'utf8');
+check('AAA-05: main.js imports and drives App state machine',
+  appMainSrc.includes("from './core/app.js'") && appMainSrc.includes('app.togglePause()') && appMainSrc.includes('APP_STATES.PLAYING'),
+  'importsApp=' + appMainSrc.includes("from './core/app.js'") + ' pauseHook=' + appMainSrc.includes('app.togglePause()'));
 
 
 // ---- 14. Frame-budget telemetry (Phase 1 / Gap B next) ------------------------
