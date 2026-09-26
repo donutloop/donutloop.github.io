@@ -199,7 +199,7 @@ Each item ships green: `check_world.mjs` passes, browser render clean, one commi
 
 ## Phase 8 — foundation hardening
 
-- **AAA-01** Adopt a local build (Vite/esbuild); move three to a pinned dev-dep; replace the CDN importmap in `index.html` with a bundled entry. *(ADR 0021)* M
+- **✅ DONE (AAA-01)** Adopt a local build (Vite/esbuild); move three to a pinned dev-dep; replace the CDN importmap in `index.html` with a bundled entry. *(ADR 0021)* M — esbuild bundles `src/main.js` → `dist/worldloop.js`; `npm run dev` serves offline; CI smoke builds then renders.
 - **AAA-02** Fix the loop: exactly one `update()` per frame, explicit `dt`, clamp, frame budget. `scene.js`, `main.js`. S
 - **AAA-03** Seeded deterministic RNG (xorshift) replacing `Math.random()` in `noise.js` / `road_graph.js`. *(ADR 0022)* S
 - **AAA-04** Fixed-timestep `core/time.js` (accumulator, `update(dt)`/`render()` split, pause). *(ADR 0022)* M

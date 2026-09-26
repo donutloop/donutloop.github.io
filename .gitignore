@@ -1,6 +1,4 @@
 node_modules/
-sessions/
-auth.json
-models.json
-models-store.json
+dist/
 *.log
+.DS_Store

@@ -383,6 +383,31 @@ check('minimap 2d-draw disabled on Node but logic deterministic',
   'ctx=' + minimap.ctx + ' district=' + mmState.district);
 
 
+// ---- ADR 0021 — bundled local build (AAA-01) --------------------------------------
+// three is pinned as a devDependency and bundled into dist/worldloop.js by esbuild,
+// so index.html no longer needs a CDN importmap. The harness verifies the build
+// contract so a broken bundle or a resurrected CDN dependency fails the gate.
+import { readFileSync, existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+check('ADR 0021: three is a pinned (exact) devDependency',
+  pkg.devDependencies && pkg.devDependencies.three === '0.160.0',
+  'devDependencies.three=' + (pkg.devDependencies && pkg.devDependencies.three));
+check('ADR 0021: build/dev/preview/test/typecheck scripts present',
+  ['build', 'dev', 'preview', 'test', 'typecheck'].every(s => s in pkg.scripts),
+  'scripts=' + Object.keys(pkg.scripts || {}).join(','));
+const html = readFileSync('index.html', 'utf8');
+check('ADR 0021: index.html loads the bundled entry (dist/worldloop.js)',
+  html.includes('./dist/worldloop.js'),
+  'entry=' + (html.includes('./dist/worldloop.js') ? 'dist/worldloop.js' : 'src/main.js'));
+check('ADR 0021: index.html has NO CDN importmap script for three',
+  !html.includes('type="importmap"') && !html.includes('unpkg') && !html.includes('https://unpkg.com/three'),
+  'no-importmap=' + (!html.includes('type="importmap"') && !html.includes('unpkg')));
+// The CI smoke below needs a real bundle; build it so index.html resolves.
+if (process.argv.includes('--ci')) {
+  execSync('node build/build.mjs', { stdio: 'inherit' });
+}
+
 // ---- CI smoke: headless browser render assertion (--ci) -------------------------
 // Runs the structured checks above, then launches headless Chromium, loads
 // index.html, and asserts the browser path actually renders a frame with no

@@ -3,9 +3,14 @@
   "version": "6.4.2",
   "type": "module",
   "scripts": {
-    "check": "node check_world.mjs"
+    "build": "node build/build.mjs",
+    "dev": "node build/dev.mjs",
+    "preview": "node build/preview.mjs",
+    "test": "node check_world.mjs",
+    "typecheck": "node build/typecheck.mjs"
   },
-  "dependencies": {
-    "three": "^0.160.0"
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "three": "0.160.0"
   }
 }
