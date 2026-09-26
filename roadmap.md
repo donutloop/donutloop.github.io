@@ -189,3 +189,66 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 A feature is ✅ DONE only when: it ships as one commit; the browser renders it
 with no console errors; `node check_world.mjs` passes; `roadmap.md` status is
 updated; and a `docs/adr/` entry exists if the decision is non-obvious.
+
+---
+
+# AAA transformation (Phase 8+) — triple-A browser game
+
+Driving plan: `docs/aaa-migration-plan.md`. Decisions: `docs/adr/ADR-0021..0024`.
+Each item ships green: `check_world.mjs` passes, browser render clean, one commit per feature.
+
+## Phase 8 — foundation hardening
+
+- **AAA-01** Adopt a local build (Vite/esbuild); move three to a pinned dev-dep; replace the CDN importmap in `index.html` with a bundled entry. *(ADR 0021)* M
+- **AAA-02** Fix the loop: exactly one `update()` per frame, explicit `dt`, clamp, frame budget. `scene.js`, `main.js`. S
+- **AAA-03** Seeded deterministic RNG (xorshift) replacing `Math.random()` in `noise.js` / `road_graph.js`. *(ADR 0022)* S
+- **AAA-04** Fixed-timestep `core/time.js` (accumulator, `update(dt)`/`render()` split, pause). *(ADR 0022)* M
+
+## Phase 9 — state machine, input, persistence
+
+- **AAA-05** `core/app.js` state machine: boot/loading/menu/playing/paused/gameover; pause hook. *(ADR 0023)* M
+- **AAA-06** `input/` action-map + keyboard/mouse/touch/gamepad adapters; strip raw DOM bindings from `player.js`. *(ADR 0023)* M
+- **AAA-07** `core/settings.js`: quality tiers, control remap, audio; persisted to localStorage. *(ADR 0023)* M
+- **AAA-08** `core/save.js`: serialize seed + player state + progress; replay-safe. *(ADR 0022/0023)* L
+
+## Phase 10 — world scale & spatial
+
+- **AAA-09** Spatial broadphase (uniform grid) replacing per-frame `getColliders()` concat in `chunk_manager.js`. M
+- **AAA-10** Chunk LOD/pooling + streaming budget; remove the double `update()` in `main.js`. L
+- **AAA-11** Renderer resilience: capability tiers, pixel-ratio cap, context-loss recovery, shadow budget. *(ADR 0023)* M
+
+## Phase 11 — asset & audio pipeline
+
+- **AAA-12** `render/assets.js`: GLTF/GLB + KTX2/Basis loader, streaming, preload manifest. *(ADR 0024)* L
+- **AAA-13** WebAudio bus: master/music/sfx buses, pooling, mute/pause. *(ADR 0024)* M
+- **AAA-14** Convert hero props (cranes, cars, EMS) to authored GLB + textures with LOD. *(ADR 0024)* M
+
+## Phase 12 — UI, a11y, post-FX quality
+
+- **AAA-15** Real UI layer: HUD, menu, pause, settings, loading, dialog; accessibility. *(ADR 0023)* L
+- **AAA-16** Post-FX quality tiers from settings (bloom/droplets on/off by tier). *(ADR 0023)* M
+
+## Phase 13 — verification & CI/CD (AAA release gates)
+
+- **AAA-17** Node unit-test runner seeded from `core/rng.js`; fixtures around `check_world.mjs` systems. *(ADR 0024)* M
+- **AAA-18** Headless visual-regression screenshots (seeded determinism). *(ADR 0022/0024)* M
+- **AAA-19** Perf-regression thresholds over `telemetry.js` frame budget. *(ADR 0024)* M
+- **AAA-20** GitHub Actions CI/CD: build → unit → smoke → visual → perf → deploy. *(ADR 0021/0024)* M
+
+## Phase 14 — AAA content & polish
+
+- **AAA-21** Save/continue + session persistence UI (title, resume, settings). *(ADR 0023)* L
+- **AAA-22** Gameplay loop: objectives/score/checkpoint/progression + telemetry events. *(ADR 0023)* L
+- **AAA-23** Audio/music integration (EMS siren, weather, UI). *(ADR 0024)* S
+- **AAA-24** Authoring + polish pass: hero assets, lighting, post-FX, accessibility, README/docs accuracy. *(ADR 0021..0024)* L
+
+## AAA definition of done
+
+1. `check_world.mjs` green at every phase; headless smoke passes in CI.
+2. Bundled local build (no CDN); deterministic seeded runs; fixed timestep.
+3. Game states (boot/loading/menu/playing/paused) with save/resume.
+4. Input abstraction (kbd/mouse/touch/gamepad) + remappable controls.
+5. Settings (quality tiers) persisted; renderer resilient (tiers, context-loss).
+6. Spatial broadphase; streaming chunks; authored GLB/KTX2 assets; audio bus.
+7. Unit + visual + perf regression in GitHub Actions; deployable artifact.
+8. Docs accurate (README, roadmap, ADRs) — no drift.
