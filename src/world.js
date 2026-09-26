@@ -702,10 +702,15 @@ function addWindowLights(geoms, cx, cz, bw, bh) {
 }
 
 export async function createWorld(scene) {
-    const ambientLight = new THREE.AmbientLight(0x222233, 0.3);
+    // Ambient carries the scene's diffuse brightness with NO specular glare,
+    // so bump it up to compensate for the gentler sun below.
+    const ambientLight = new THREE.AmbientLight(0x222233, 0.42);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xaaccff, 0.5);
+    // Sun at 0.5 was blowing out specular highlights on every glossy surface
+    // ("reflection from the sunny"). Drop it to 0.3 for a softer, less glary
+    // sun — ambient above keeps the scene from going dark.
+    const directionalLight = new THREE.DirectionalLight(0xaaccff, 0.3);
     directionalLight.position.set(50, 500, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
