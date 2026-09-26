@@ -30,7 +30,7 @@ feature). Status legend: ✅ DONE · 🟢 mostly done (small leftovers) · 🟠 
 | Agent verification | `check_world.mjs` | ✅ done |
 | Accepted design decisions | `docs/adr/0001..0009` | ✅ done |
 | Agent loop | `tools/pi-loop/` | ✅ done |
-| 2026 test suite (EPIC) | `tools/test/` (runner, property, snapshot, visual, perf, mutation) | ⏳ PLANNED (Phase 15) |
+| 2026 test suite (EPIC) | `tools/test/` + `tools/ci/` (runner, property, snapshot, visual, perf, mutation, pipeline, nightly) | ✅ DONE (Phase 15, AAA-25..31) |
 
 ## Phase 0 — hygiene
 
@@ -251,24 +251,28 @@ perf-regression budgets, mutation testing, and a CI/CD gate — layered on and
 generalizing the AAA-17..20 verification spine. One commit per item; every item
 keeps `check_world.mjs` green and the browser render clean.
 
-- **AAA-25** Test-runner core `tools/test/runner.mjs`: per-test seeded RNG isolation
+**STATUS: DONE** — AAA-25..31 landed (see git log). `npm run test:ci` gates every
+commit (build → unit → property → snapshot → visual → perf → mutation → deploy)
+and `npm run test:nightly` runs the seeded marathon with flake-tracking.
+
+- **✅ AAA-25** Test-runner core `tools/test/runner.mjs`: per-test seeded RNG isolation
   from `core/rng.js`, parallel-safe, TAP/JUnit + machine-readable JSON output;
   supersedes the ad-hoc check harness as the structured surface. *(ADR 0022/0024)* M
-- **AAA-26** Property-based testing (fast-check style, seeded) over the sim:
+- **✅ AAA-26** Property-based testing (fast-check style, seeded) over the sim:
   traffic routing, road-graph invariants, chunk LOD transitions, weather state
   machine — invariant assertions under seeded fuzz, reproducible per seed. *(ADR 0022)* M
-- **AAA-27** Snapshot / golden-file tests: deterministic fixture snapshots of
+- **✅ AAA-27** Snapshot / golden-file tests: deterministic fixture snapshots of
   telemetry JSON, road-graph topology, seeded city-chunk matrices; diff-gate on
   commit so any determinism drift fails the build. *(ADR 0022)* L
-- **AAA-28** Headless visual-regression screenshots (seeded determinism) at fixed
+- **✅ AAA-28** Headless visual-regression screenshots (seeded determinism) at fixed
   quality tiers: pixel-diff baselines across the settings tier × postFX matrix
   (extends AAA-18 beyond a single tier). *(ADR 0022/0024)* M
-- **AAA-29** Perf-regression thresholds over `telemetry.js` frame budget:
+- **✅ AAA-29** Perf-regression thresholds over `telemetry.js` frame budget:
   fps / draw-call / chunk-budget limits per quality tier, fail on regression. *(ADR 0024)* M
-- **AAA-30** Mutation testing: mutate seeded sim paths (RNG, road graph, weather,
+- **✅ AAA-30** Mutation testing: mutate seeded sim paths (RNG, road graph, weather,
   chunk LOD) and assert the suite still catches them — guards the verification
   harness itself against becoming a tautology. *(ADR 0022)* L
-- **AAA-31** CI/CD pipeline (AAA-20) extended end-to-end: build → unit → property
+- **✅ AAA-31** CI/CD pipeline (AAA-20) extended end-to-end: build → unit → property
   → snapshot → visual → perf → deploy, plus a nightly seeded marathon with
   flake-tracking so the suite stays green over long deterministic runs. *(ADR 0021/0024)* M
 
@@ -283,10 +287,10 @@ keeps `check_world.mjs` green and the browser render clean.
 7. Unit + visual + perf regression in GitHub Actions; deployable artifact.
 8. Docs accurate (README, roadmap, ADRs) — no drift.
 
-## Phase 15 (2026 test-suite EPIC) done when
+## Phase 15 (2026 test-suite EPIC) — ✅ DONE
 
-1. `tools/test/runner.mjs` is the single structured surface; per-test seeded RNG isolation.
-2. Property-based (seeded fuzz), snapshot/golden, headless visual-regression, perf-budget,
+1. ✅ `tools/test/runner.mjs` is the single structured surface; per-test seeded RNG isolation.
+2. ✅ Property-based (seeded fuzz), snapshot/golden, headless visual-regression, perf-budget,
    and mutation gates all green and wired into CI (build → unit → property → snapshot →
    visual → perf → deploy) + nightly seeded marathon.
-3. Every item ships green: `check_world.mjs` passes, browser render clean, one commit each.
+3. ✅ Every item ships green: `check_world.mjs` passes, browser render clean, one commit each.
