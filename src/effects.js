@@ -255,6 +255,7 @@ export class PostProcessingPipeline {
         'uniform float uTime;',
         'uniform vec2 uResolution;',
         'varying vec2 vUv;',
+        'uniform sampler2D tDiffuse;',
         '',
         'float hash(vec2 p) {',
         '  vec3 p3 = fract(vec3(p.xyx) * 0.1031);',
@@ -285,8 +286,9 @@ export class PostProcessingPipeline {
         '',
         '  // only some cells carry a droplet',
         '  float has = step(0.25, hash(id + 3.0));',
+        '  vec4 sceneColor = texture2D(tDiffuse, vUv);',
         '  float v = (drop + streak) * has * uIntensity;',
-        '  gl_FragColor = vec4(vec3(v), v);',
+        '  gl_FragColor = vec4(sceneColor.rgb + vec3(v) * 0.25, 1.0);',
         '}'
       ].join('\n')
     };
