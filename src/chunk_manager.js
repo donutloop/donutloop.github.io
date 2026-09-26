@@ -82,7 +82,11 @@ export class ChunkManager {
 
         this.chunks = new Map(); // "x,z" -> chunkData
         this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
-        this.renderDistance = 3; // chunks radius (Reduced for performance)
+        // Stream 2 chunks out (25 chunks) instead of 3 (49): full-detail geometry
+        // everywhere (see lodDistance below) is heavy, and the old 3-chunk radius
+        // caused streaming hitches as the player drove. A 5x5-block detailed city
+        // keeps the view substantial while halving the build/draw load.
+        this.renderDistance = 2; // chunks radius (Reduced for performance)
         // Full-detail radius covers the ENTIRE streamed world: the square load
         // range spans up to R*sqrt(2) chunks, so lodDistance must be >= that.
         // The old lodDistance of 2 (vs renderDistance 3) greyed the whole outer

@@ -567,16 +567,16 @@ player.weatherSystem = weather;
     const noop = { loadChunk() {}, unloadChunk() {} };
     const mgr = new ChunkManager(scene, player, worldData, noop, noop, noop, noop, noop);
 
-    // Far-corner chunk of the square load range (R=3 -> chunk (3,3), dist ~4.24).
-    mgr.loadChunk(3, 3);
-    const corner = mgr.chunks.get('3,3');
+    // Far-corner chunk of the square load range (R=2 -> chunk (2,2), dist ~2.83).
+    mgr.loadChunk(2, 2);
+    const corner = mgr.chunks.get('2,2');
     check('LOD: far-corner streamed chunk renders FULL detail (not grey)',
         corner && corner.lodLevel === 0,
         'lodLevel=' + (corner && corner.lodLevel));
 
-    // Edge chunk straight ahead (0,3), dist 3 — on the streaming boundary.
-    mgr.loadChunk(0, 3);
-    const edge = mgr.chunks.get('0,3');
+    // Edge chunk straight ahead (0,2), dist 2 — on the streaming boundary.
+    mgr.loadChunk(0, 2);
+    const edge = mgr.chunks.get('0,2');
     check('LOD: straight-edge streamed chunk renders FULL detail (not grey)',
         edge && edge.lodLevel === 0,
         'lodLevel=' + (edge && edge.lodLevel));
