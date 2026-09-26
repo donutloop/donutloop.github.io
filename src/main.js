@@ -30,6 +30,7 @@ let effectSystem;
 let postFx; // [NEW] post-processing pipeline (bloom + rain droplets)
 let trafficLightSystem; // [NEW]
 let emergencySystem; // [NEW] Gap D — emergency response
+let constructionSystem; // [NEW] construction sites — animated tower cranes
 let chunkManager;
 let telemetry; // [NEW]
 let roadGraph; // [NEW] road-network graph for realistic car routing
