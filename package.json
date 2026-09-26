@@ -10,6 +10,8 @@
     "test:runner": "node tools/test/runner.mjs",
     "test:runner:json": "node tools/test/runner.mjs --json",
     "test:snapshot": "node tools/test/runner.mjs tools/test/suites/snapshot_sim.mjs",
+    "test:ci": "node tools/ci/ci_pipeline.mjs",
+    "test:nightly": "node tools/ci/nightly.mjs",
     "typecheck": "node build/typecheck.mjs"
   },
   "devDependencies": {

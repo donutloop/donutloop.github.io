@@ -34,6 +34,13 @@ jobs:
       - name: Bundle
         run: npm run build
 
+      # AAA-31: gate every commit on the full test pipeline.
+      # build → unit → property → snapshot → visual → perf → mutation → deploy.
+      # Any stage regression (or golden/visual drift) fails the job, so the
+      # dist commit below only happens on a fully green pipeline.
+      - name: Test pipeline (build, unit, property, snapshot, visual, perf, mutation, deploy)
+        run: npm run test:ci
+
       - name: Commit fresh bundle back to main
         id: commit
         run: |
