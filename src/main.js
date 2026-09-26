@@ -3,6 +3,7 @@ import { initScene, animate } from './scene.js';
 import { createWorld } from './world.js';
 import { Player } from './player.js';
 import { TrafficSystem } from './traffic.js';
+import { EmergencySystem } from './emergency.js'; // [NEW] Gap D — emergency response
 import { WeatherSystem } from './weather.js';
 import { PedestrianSystem } from './pedestrians.js';
 import { ParkingSystem } from './parking.js';
@@ -25,6 +26,7 @@ let parkingSystem;
 let airplaneSystem;
 let effectSystem;
 let trafficLightSystem; // [NEW]
+let emergencySystem; // [NEW] Gap D — emergency response
 let chunkManager;
 let telemetry; // [NEW]
 let roadGraph; // [NEW] road-network graph for realistic car routing
@@ -67,6 +69,12 @@ async function init() {
 
         // Initialize Systems
         trafficLightSystem = new TrafficLightSystem(scene, worldData.roadWidth, worldData.blockSize);
+
+        // [NEW] Gap D — dynamic city events: emergency response & sirens.
+        emergencySystem = new EmergencySystem(scene, worldData.roadWidth, worldData.blockSize);
+        emergencySystem.setEffects(effectSystem);
+        window.emergencySystem = emergencySystem; // Machine-readable on the browser path
+        player.emergencySystem = emergencySystem; // Hook crashes -> dispatch response
         trafficSystem = new TrafficSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
         parkingSystem = new ParkingSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
         pedestrianSystem = new PedestrianSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
@@ -101,7 +109,7 @@ async function init() {
         window.roadGraph = roadGraph; // Machine-readable on the browser path too
 
         // Dependency Injection
-        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph);
+        trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph, emergencySystem);
         parkingSystem.setDependencies(effectSystem);
         pedestrianSystem.setDependencies(trafficLightSystem, parkingSystem, effectSystem);
 
@@ -164,6 +172,7 @@ async function init() {
                 }
 
                 if (player) player.update(delta);
+                if (emergencySystem) emergencySystem.update(delta);
                 if (trafficSystem) trafficSystem.update(delta);
                 if (trafficLightSystem) trafficLightSystem.update(delta);
                 if (weatherSystem) {

@@ -642,6 +642,12 @@ export class Player {
         // Effect
         if (this.effectSystem) this.effectSystem.createCrashEffect(impactPoint);
 
+        // Gap D — dynamic city events: dispatch an EMS response on a hard crash.
+        const crashSpeed = Math.abs(this.carVelocity) || 20;
+        if (crashSpeed > 25 && this.emergencySystem) {
+            this.emergencySystem.respond(impactPoint.x, impactPoint.z);
+        }
+
         // Reduce Health
         const speed = Math.abs(this.carVelocity) || 20;
         const damage = speed * 1.5;

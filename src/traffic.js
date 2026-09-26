@@ -205,13 +205,14 @@ export class TrafficSystem {
         return null;
     }
 
-    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph) {
+    setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph, emergencySystem) {
         this.player = player;
         this.parkingSystem = parkingSystem;
         this.trafficLightSystem = trafficLightSystem;
         this.effectSystem = effectSystem;
         this.pedestrianSystem = pedestrianSystem;
         this.roadGraph = roadGraph || null;
+        this.emergencySystem = emergencySystem || null;
     }
 
     // [Gap C] Crosswalk timing — cars yield to a pedestrian present at / crossing
@@ -511,6 +512,13 @@ export class TrafficSystem {
 
         // 2. Check Parked/Player
         if (checkList(externalObstacles)) return true;
+
+        // 3. Gap D — lane-clearing priority: ordinary cars yield to an EMS
+        //    vehicle ahead in the lane (emergency response never yields).
+        if (this.emergencySystem) {
+            const ems = this.emergencySystem.getColliders();
+            if (ems.length && checkList(ems)) return true;
+        }
 
         return false;
     }

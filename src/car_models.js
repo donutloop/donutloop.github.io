@@ -42,6 +42,9 @@ export function createCarMesh(type = 'sedan', color = null) {
     else if (type === 'truck') buildTruck(geoms);
     else if (type === 'taxi') buildTaxi(geoms);
     else if (type === 'bus') buildBus(geoms);
+    else if (type === 'ambulance') buildAmbulance(geoms);
+    else if (type === 'fire') buildFireTruck(geoms);
+    else if (type === 'police') buildPolice(geoms);
     else buildSedan(geoms); // Fallback
 
     // 4. Merge and Create Meshes
@@ -317,6 +320,53 @@ function pickColor(type) {
     if (type === 'taxi') return 0xffcc00;
     if (type === 'bus') return Math.random() < 0.5 ? 0x3366cc : 0xcc3333;
     if (type === 'truck') return 0x885533;
+    if (type === 'ambulance') return 0xf2f2f2;
+    if (type === 'fire') return 0xcc2222;
+    if (type === 'police') return 0x1a1a2e;
     const colors = [0x111111, 0xeeeeee, 0x888888, 0xcc0000, 0x0033cc, 0x225522, 0x550000];
     return colors[Math.floor(Math.random() * colors.length)];
+}
+
+// --- EMERGENCY VEHICLES (Gap D) ---
+
+function buildAmbulance(geoms) {
+    const w = 2.1, l = 5.6, hBody = 1.6;
+    const wheelY = 0.5;
+    // Box body (van)
+    geoms.paint.push(box(w, hBody, l, 0, wheelY + 0.5 + hBody / 2 - 0.15, 0));
+    // Front cab windshield
+    geoms.glass.push(box(w - 0.15, 0.9, 0.15, 0, wheelY + 1.1, l / 2 - 0.4, -0.2, 0, 0));
+    // Side windows
+    geoms.glass.push(box(0.1, 0.7, l - 3.4, -w / 2 - 0.05, wheelY + 1.4, -0.6));
+    geoms.glass.push(box(0.1, 0.7, l - 3.4, w / 2 + 0.05, wheelY + 1.4, -0.6));
+    // Roof cross (medical)
+    geoms.plastic.push(box(0.6, 0.18, 0.6, 0, wheelY + hBody + 0.4, -0.4));
+    addWheels(geoms, w, 3.6, 0.55);
+}
+
+function buildFireTruck(geoms) {
+    const w = 2.6, l = 7.0;
+    const wheelY = 0.6;
+    // Cab
+    geoms.paint.push(box(w, 1.4, 2.2, 0, wheelY + 0.7 + 0.6, l / 2 - 1.1 - 0.2));
+    geoms.glass.push(box(w - 0.1, 0.6, 0.15, 0, wheelY + 1.4, l / 2 - 0.5, -0.15, 0, 0));
+    // Pump body
+    geoms.paint.push(box(w, 2.0, 3.2, 0, wheelY + 0.7 + 1.0, -0.4));
+    // Hose rack
+    geoms.plastic.push(box(0.25, 0.9, 3.2, -w / 2 + 0.15, wheelY + 1.4, -0.4));
+    // Ladder (rear)
+    geoms.chrome.push(box(0.4, 0.4, 2.6, 0, wheelY + 1.8, -l / 2 + 1.6));
+    addWheels(geoms, w - 0.2, 5.0, 0.6);
+}
+
+function buildPolice(geoms) {
+    const w = 2.0, l = 5.0;
+    const wheelY = 0.5;
+    // Sedan body
+    geoms.paint.push(box(w, 0.55, l - 0.4, 0, wheelY + 0.55 / 2, 0));
+    // Cabin
+    geoms.paint.push(box(w - 0.25, 0.5, l * 0.4, 0, wheelY + 0.55 + 0.25, 0.1));
+    geoms.glass.push(box(w - 0.3, 0.4, 0.1, 0, wheelY + 0.8, l * 0.22, -0.25, 0, 0));
+    geoms.glass.push(box(w - 0.3, 0.4, 0.1, 0, wheelY + 0.8, -l * 0.38, 0.25, 0, 0));
+    addWheels(geoms, w, 3.0, 0.35);
 }

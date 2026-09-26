@@ -29,6 +29,14 @@ export function disposeCar(carGroup) {
     });
 }
 
+export function getEmergencyCarType() {
+    // Gap D — emergency response fleet: ambulance / fire / police
+    const r = Math.random();
+    if (r < 0.4) return 'ambulance';
+    if (r < 0.7) return 'fire';
+    return 'police';
+}
+
 export function getRandomCarType() {
     const r = Math.random();
     // Sedan: 30% (0.0 - 0.3)

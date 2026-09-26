@@ -25,6 +25,7 @@ import { deformMesh } from './src/deformation.js';
 import { SimplexNoise } from './src/noise.js';
 import { FrameBudgetTelemetry } from './src/telemetry.js';
 import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
+import { EmergencySystem } from './src/emergency.js'; // [NEW] Gap D — emergency response
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
@@ -79,6 +80,8 @@ const weather = new WeatherSystem(scene, world.directionalLight, world.ambientLi
 const airplanes = new AirplaneSystem(scene, world.citySize);
 const effects = new EffectSystem(scene);
 const trafficLights = new TrafficLightSystem(scene, world.roadWidth, world.blockSize);
+    const emergency = new EmergencySystem(scene, world.roadWidth, world.blockSize); // Gap D
+    emergency.setEffects(effects);
 const chunkManager = new ChunkManager(scene, null, world, traffic, parking, pedestrians, trafficLights);
 
 // ---- 1. World surface -----------------------------------------------------
@@ -135,6 +138,29 @@ check('traffic.pedestrianNearCrosswalk false when no ped system', traffic.pedest
 traffic.pedestrianSystem = { peds: [pedAhead] };
 check('traffic.checkBlocked yields for crossing pedestrian', traffic.checkBlocked(yieldCar, []) === true, 'yield on crosswalk');
 traffic.pedestrianSystem = null;
+
+    // ---- 2b. Gap D — dynamic city events (emergency response & sirens) --------
+    // Incident -> response coverage: respond() increments the machine-readable
+    // events counter and dispatches a priority EMS vehicle with lights.
+    const eventsBefore = emergency.events;
+    const emsVehicle = emergency.respond(50, 50);
+    check('emergency.respond() dispatches an EMS vehicle', emsVehicle && emsVehicle.type);
+    check('emergency.events counter increments on response', emergency.events === eventsBefore + 1);
+    check('emergency has an active responding fleet', emergency.active.length === 1);
+    check('EMS fleet uses emergency vehicle model', ['ambulance', 'fire', 'police'].includes(emsVehicle.type));
+    // Lane-clearing priority: ordinary traffic must yield to an EMS vehicle ahead.
+    traffic.emergencySystem = emergency;
+    const laneCar = { axis: 'x', direction: 1, mesh: { position: new THREE.Vector3(0, 0, 0) } };
+    const emsWrapper = { mesh: { position: new THREE.Vector3(10, 0, 0) } }; // 10m ahead in lane
+    emergency.active = [ { mesh: new THREE.Object3D(), target: new THREE.Vector3(50, 0, 50), speed: 20, life: 20, type: emsVehicle.type } ];
+    emergency.active[0].mesh.position.set(10, 0, 0);
+    const yielded = traffic.checkBlocked(laneCar, [], [emsWrapper]);
+    check('traffic yields (lane-clearing) for EMS vehicle ahead', yielded === true);
+    // Siren + rotating-light effect attached to dispatched EMS vehicle.
+    check('EMS vehicle gets siren/light effect', effects.sirens.length >= 1);
+    emergency.active = [];
+    traffic.emergencySystem = null;
+
 
 // ---- 3. Weather / seasons --------------------------------------------------
 check('weather.currentWeather in allowed set', ['sunny', 'rain', 'snow'].includes(weather.currentWeather),
@@ -195,6 +221,9 @@ const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSyste
   'ChunkManager', 'Player'].every(sym => mainSrc.includes(sym));
 check('main.js wires all systems', wired, 'symbols checked');
 check('main.js passes pedestrianSystem to traffic.setDependencies', mainSrc.includes('pedestrianSystem)'), '5th dep wired');
+        check('main.js wires EmergencySystem -> emergency response', mainSrc.includes('EmergencySystem') && mainSrc.includes('emergencySystem.update(delta)'));
+        check('main.js hooks player crashes -> emergency.respond', mainSrc.includes('player.emergencySystem'));
+        check('main.js passes emergencySystem to traffic.setDependencies', mainSrc.includes('roadGraph, emergencySystem'));
 check('main.js wires FrameBudgetTelemetry', mainSrc.includes('FrameBudgetTelemetry') && mainSrc.includes('recordFrame'), 'telemetry wired');
 
 // ---- 14. Frame-budget telemetry (Phase 1 / Gap B next) ------------------------
@@ -247,7 +276,8 @@ const report = {
     deformation: { exports: ['deformMesh'] },
     noise: { exports: ['SimplexNoise'] },
     telemetry: { exports: ['FrameBudgetTelemetry'] },
-    road_graph: { exports: ['RoadGraph'] }
+    road_graph: { exports: ['RoadGraph'] },
+    emergency: { exports: ['EmergencySystem'], events: emergency.events }
   },
   telemetry: {
     fps: +frameBudget.fps.toFixed(2),

@@ -5,6 +5,23 @@ export class EffectSystem {
         this.scene = scene;
         this.particles = [];
         this.emitters = [];
+        this.sirens = []; // Gap D — rotating emergency lights
+    }
+
+    // Gap D — attach pulsing red/blue emergency lights to an EMS vehicle roof.
+    createEmergencyLights(parentObject) {
+        const redMat = new THREE.MeshBasicMaterial({ color: 0xff1111, transparent: true, opacity: 0 });
+        const blueMat = new THREE.MeshBasicMaterial({ color: 0x1111ff, transparent: true, opacity: 0 });
+        const red = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), redMat);
+        const blue = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), blueMat);
+        red.position.set(-0.4, 1.5, 0);
+        blue.position.set(0.4, 1.5, 0);
+        red.userData = { parent: parentObject, siren: true };
+        blue.userData = { parent: parentObject, siren: true };
+        this.scene.add(red);
+        this.scene.add(blue);
+        this.sirens.push({ red, blue, parent: parentObject, timer: 0 });
+        return this.sirens[this.sirens.length - 1];
     }
 
     addEmitter(object, type) {
@@ -147,6 +164,25 @@ export class EffectSystem {
                 p.mesh.rotation.y += delta * 5;
                 p.mesh.scale.setScalar(p.life); // Shrink
             }
+        }
+
+        // Gap D — pulse emergency lights; detach when the EMS vehicle despawns.
+        for (let i = this.sirens.length - 1; i >= 0; i--) {
+            const s = this.sirens[i];
+            const alive = s.parent && s.parent.visible;
+            if (!alive) {
+                this.scene.remove(s.red);
+                this.scene.remove(s.blue);
+                s.red.geometry.dispose(); s.red.material.dispose();
+                s.blue.geometry.dispose(); s.blue.material.dispose();
+                this.sirens.splice(i, 1);
+                continue;
+            }
+            s.timer += delta;
+            // Alternate red/blue flashes (rotating-light illusion)
+            const on = s.timer % 0.5 < 0.25;
+            s.red.material.opacity = on ? 1 : 0;
+            s.blue.material.opacity = on ? 0 : 1;
         }
     }
 }

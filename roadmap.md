@@ -95,12 +95,13 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   streamed chunks + current district name, so the player can navigate.
 - **⏳ PLANNED** Weather-reactive driving (snow/rain reduce friction; expose as
   a `weather` field in `check_world.mjs` output).
-- **⏳ PLANNED** Dynamic city events — emergency response & sirens. Spawn
-  ambulance / fire / police vehicles on crash incidents (hook the existing
-  `deformation.js` crash path), add a pooled EMS class to `traffic.js` with
-  siren + rotating-light effects via `effects.js`, and lane-clearing priority
-  so ordinary cars yield ahead. Expose an `events` counter in `check_world.mjs`
-  so the agent loop can verify incident → response coverage.
+- **✅ DONE (Round 7 / Gap D)** Dynamic city events — emergency response &
+  sirens. Added `src/emergency.js` `EmergencySystem` (pooled ambulance / fire /
+  police fleet), new EMS vehicle builders in `car_models.js`, siren +
+  rotating-light effects via `effects.js`, crash hook in `player.js`, and
+  lane-clearing priority in `traffic.js` so ordinary cars yield ahead. Exposed
+  an `events` counter + `EmergencySystem` checks in `check_world.mjs` (53/53
+  green). ADR 0014.
 
 ## Phase 5 — tooling / agentic
 
@@ -124,9 +125,10 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   connectivity without a browser.
 - **Gap C — crosswalk timing** ✅ resolved (ADR 0010): small, self-contained;
   done as Round 2 — cars yield at crosswalks via `pedestrianNearCrosswalk`.
-- **Gap D — emergency events**: gameplay-depth win built on the already-done
-  crash/deformation + pooled-traffic systems; needs an EMS vehicle type, an
-  `events` telemetry field, and a siren/light effect stage.
+- **Gap D — emergency events ✅ DONE (Round 7)**: gameplay-depth win built on
+  the already-done crash/deformation + pooled-traffic systems. Added an EMS
+  vehicle type, an `events` telemetry field, and a siren/light effect stage.
+  ADR 0014.
 - **Resolved ✅**: `check_world.mjs` rebuilt as a real structured verification
   harness. It runs the ACTUAL src systems in Node against the real `three`
   package (installed as a dev dep via `package.json`), instantiates every system,
