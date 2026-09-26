@@ -326,8 +326,8 @@ const wired = ['createWorld', 'TrafficSystem', 'PedestrianSystem', 'ParkingSyste
   'ChunkManager', 'Player'].every(sym => mainSrc.includes(sym));
 check('main.js wires all systems', wired, 'symbols checked');
 check('main.js passes pedestrianSystem to traffic.setDependencies', mainSrc.includes('pedestrianSystem)'), '5th dep wired');
-        check('main.js wires EmergencySystem -> emergency response', mainSrc.includes('EmergencySystem') && mainSrc.includes('emergencySystem.update(dt)'));
-  check('main.js wires ConstructionSystem -> animated cranes', mainSrc.includes('ConstructionSystem') && mainSrc.includes('constructionSystem.update(dt)'));
+        check('main.js wires EmergencySystem -> emergency response', mainSrc.includes('EmergencySystem') && mainSrc.includes('emergencySystem.update(fixedDt)'));
+  check('main.js wires ConstructionSystem -> animated cranes', mainSrc.includes('ConstructionSystem') && mainSrc.includes('constructionSystem.update(fixedDt)'));
 
         check('main.js hooks player crashes -> emergency.respond', mainSrc.includes('player.emergencySystem'));
         check('main.js passes emergencySystem to traffic.setDependencies', mainSrc.includes('roadGraph, emergencySystem'));
@@ -359,6 +359,61 @@ const slowRes = slowLoop.step(8, 1 / 60, 40);
 check('AAA-02: frame budget drops frames when update cost overshoots',
   slowRes.skipped > 0 && slowLoop.overBudget > 0,
   'skipped=' + slowRes.skipped + ' overBudget=' + slowLoop.overBudget);
+// ---- AAA-04: fixed-timestep core (ADR 0022) ----------------------------------
+import { FixedTimestep, FIXED_DT, MAX_STEPS_PER_FRAME } from './src/core/time.js';
+const clockProbe = new FixedTimestep({ fixedDt: 1 / 30, maxStepsPerFrame: 4 });
+let clockUpdates = 0, clockRenders = 0;
+// 100ms real frame -> 3 fixed steps (100ms / 33.3ms = 3), exactly 1 render.
+clockProbe.advance(0.100, () => clockUpdates++, () => clockRenders++);
+check('AAA-04: FixedTimestep runs N fixed steps then one render per frame',
+  clockUpdates === 3 && clockRenders === 1,
+  'updates=' + clockUpdates + ' renders=' + clockRenders);
+check('AAA-04: render alpha is leftover accumulator / fixedDt',
+  clockProbe.alpha >= 0 && clockProbe.alpha < 1,
+  'alpha=' + clockProbe.alpha.toFixed(3));
+// Frame-budget clamp: a 2s stall runs at most maxStepsPerFrame updates and
+// drops the leftover time — no catch-up death spiral.
+const stallProbe = new FixedTimestep({ fixedDt: 1 / 30, maxStepsPerFrame: 4 });
+let stallUpdates = 0;
+stallProbe.advance(2.0, () => stallUpdates++, () => {});
+check('AAA-04: frame-budget clamp caps sim steps and drops leftover time',
+  stallUpdates === 4 && stallProbe.dropped > 0,
+  'updates=' + stallUpdates + ' dropped=' + stallProbe.dropped);
+// Pause/resume: paused clock freezes the accumulator (no updates) but still
+// renders the last state; resume clears the accumulator so no catch-up burst.
+const pauseProbe = new FixedTimestep();
+pauseProbe.pause();
+let pausedUpdates = 0, pausedRenders = 0;
+pauseProbe.advance(0.1, () => pausedUpdates++, () => pausedRenders++);
+check('AAA-04: pause freezes sim (no updates) but render still draws',
+  pausedUpdates === 0 && pausedRenders === 1 && pauseProbe.paused === true,
+  'updates=' + pausedUpdates + ' renders=' + pausedRenders + ' paused=' + pauseProbe.paused);
+pauseProbe.resume();
+let resumedUpdates = 0;
+pauseProbe.advance(0.1, () => resumedUpdates++, () => {});
+check('AAA-04: resume clears accumulator and sim steps resume',
+  resumedUpdates === 3 && pauseProbe.paused === false,
+  'updates=' + resumedUpdates + ' paused=' + pauseProbe.paused);
+// Determinism: identical dt -> identical step count regardless of object.
+const clockA = new FixedTimestep();
+const clockB = new FixedTimestep();
+clockA.advance(0.100, () => {}, () => {});
+clockB.advance(0.100, () => {}, () => {});
+check('AAA-04: fixed timestep is deterministic (same dt -> same steps)',
+  clockA.steps === clockB.steps && clockA.steps === 3,
+  'stepsA=' + clockA.steps + ' stepsB=' + clockB.steps);
+// Wiring: main.js imports and drives the fixed-timestep clock.
+const mainClockSrc = fs.readFileSync('src/main.js', 'utf8');
+check('AAA-04: main.js imports FixedTimestep from core/time.js',
+  mainClockSrc.includes("from './core/time.js'"),
+  'import: ' + mainClockSrc.includes("from './core/time.js'"));
+check('AAA-04: main.js advances a fixed-timestep clock and records its budget',
+  mainClockSrc.includes('simClock.advance(dt') && mainClockSrc.includes('recordClock(simClock.snapshot())'),
+  'advance=' + mainClockSrc.includes('simClock.advance(dt') + ' recordClock=' + mainClockSrc.includes('recordClock(simClock.snapshot())'));
+check('AAA-04: fixed step is 30Hz and budget clamp is 4 steps/frame',
+  FIXED_DT === 1 / 30 && MAX_STEPS_PER_FRAME === 4,
+  'FIXED_DT=' + FIXED_DT + ' MAX=' + MAX_STEPS_PER_FRAME);
+
 
 // ---- 14. Frame-budget telemetry (Phase 1 / Gap B next) ------------------------
 const telemetry = new FrameBudgetTelemetry();

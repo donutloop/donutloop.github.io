@@ -16,6 +16,7 @@ import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget tel
 import { RoadGraph } from './road_graph.js'; // [NEW] implicit road-network graph
 import { Minimap } from './minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 import { FrameLoop } from './loop.js'; // [AAA-02] frame loop hygiene
+import { FixedTimestep } from './core/time.js'; // [AAA-04] fixed-timestep core
 import { setSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
 
 let player;
@@ -157,7 +158,7 @@ async function init() {
         // [CI] Self-describing ready signal for the headless smoke test. The CI
         // driver polls window.__worldloop.ready; once a real frame has rendered
         // with draw calls recorded, the browser path is provably alive.
-        window.__worldloop = { ready: false, drawCalls: 0, fps: 0, triangles: 0, errors: 0 };
+        window.__worldloop = { ready: false, drawCalls: 0, fps: 0, triangles: 0, errors: 0, simClock: null };
 
         console.log('Game Initialized with Infinite World + Populated Chunks');
 
@@ -194,79 +195,92 @@ async function init() {
         // [AAA-02] frame loop: exactly ONE update per frame, explicit clamped
         // dt, and a frame budget that drops a frame when cost overshoots.
         const loop = new FrameLoop({ maxDt: 0.1, budgetMs: 16.7 });
+        // [AAA-04] Fixed-timestep core (ADR 0022): sim systems advance at a
+        // constant 30Hz regardless of display refresh; render happens once per
+        // frame. P key toggles pause/resume.
+        const simClock = new FixedTimestep({ fixedDt: 1 / 30, maxStepsPerFrame: 4 });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'p' || e.key === 'P') simClock.toggle();
+        });
+        window.__worldloop.simClock = simClock;
+
         animate(loop, (dt) => {
             try {
-                if (chunkManager) {
-                    chunkManager.update();   // exactly ONE update per frame
-                    // Update player colliders continuously as chunks load/unload
-                    if (player) {
-                        player.colliders = chunkManager.getColliders();
-                    }
-                }
-
-                if (player) player.update(dt);
-                if (emergencySystem) emergencySystem.update(dt);
-                if (trafficSystem) trafficSystem.update(dt);
-                if (trafficLightSystem) trafficLightSystem.update(dt);
-                if (constructionSystem) constructionSystem.update(dt);
-                if (weatherSystem) {
-                    const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
-                    weatherSystem.update(dt, playerPos);
-                } if (pedestrianSystem) pedestrianSystem.update(dt);
-                if (airplaneSystem) airplaneSystem.update(dt);
-
-                // [NEW] Round 9 — refresh minimap HUD from the live player position
-                if (minimap) {
-                    const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
-                    minimap.update(playerPos);
-                }
-
-                // Update Effects
-                if (effectSystem) effectSystem.update(dt);
-
-                // [NEW] post-processing: bloom for neon districts + rain droplets.
-                // Update targets each frame from weather + neon district density,
-                // then render through the composer (or plain renderer if disabled).
-                if (postFx) {
-                    let neonBoost = 0;
-                    if (scene) {
-                        scene.traverse(o => {
-                            if (o.isMesh && o.material && o.material.color) {
-                                const c = o.material.color.getHex();
-                                if (c === 0x00ffff || c === 0xff00ff) neonBoost++;
+                simClock.advance(dt,
+                    // SIM pass — runs 0..N times per frame at a fixed
+                    // 30Hz timestep, so physics/AI are deterministic and
+                    // independent of the display refresh rate.
+                    (fixedDt) => {
+                        if (chunkManager) {
+                            chunkManager.update();   // exactly ONE sim update per frame
+                            // Update player colliders continuously as chunks load/unload
+                            if (player) {
+                                player.colliders = chunkManager.getColliders();
                             }
-                        });
+                        }
+
+                        if (player) player.update(fixedDt);
+                        if (emergencySystem) emergencySystem.update(fixedDt);
+                        if (trafficSystem) trafficSystem.update(fixedDt);
+                        if (trafficLightSystem) trafficLightSystem.update(fixedDt);
+                        if (constructionSystem) constructionSystem.update(fixedDt);
+                        if (weatherSystem) {
+                            const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
+                            weatherSystem.update(fixedDt, playerPos);
+                        } if (pedestrianSystem) pedestrianSystem.update(fixedDt);
+                        if (airplaneSystem) airplaneSystem.update(fixedDt);
+                    },
+                    // RENDER pass — runs exactly once per frame. Visual/HUD
+                    // systems use the real frame dt so effects stay smooth
+                    // regardless of the number of fixed sim steps.
+                    (alpha, frameDt) => {
+                        const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
+
+                        // [NEW] Round 9 — minimap / district-label HUD
+                        if (minimap) minimap.update(playerPos);
+                        if (effectSystem) effectSystem.update(frameDt);
+
+                        // [NEW] post-processing: bloom for neon districts + rain droplets.
+                        if (postFx) {
+                            let neonBoost = 0;
+                            if (scene) {
+                                scene.traverse(o => {
+                                    if (o.isMesh && o.material && o.material.color) {
+                                        const c = o.material.color.getHex();
+                                        if (c === 0x00ffff || c === 0xff00ff) neonBoost++;
+                                    }
+                                });
+                            }
+                            neonBoost = Math.min(1, neonBoost / 24);
+                            const weatherState = weatherSystem ? weatherSystem.currentWeatherState : null;
+                            postFx.update(weatherState, neonBoost);
+                        }
+
+                        if (postFx && postFx.enabled) {
+                            postFx.render();
+                        } else {
+                            renderer.render(scene, camera);
+                        }
+
+                        // [NEW] real frame budget telemetry
+                        telemetry.recordFrame(frameDt, renderer.info.render.calls, renderer.info.render.triangles);
+                        telemetry.recordBudget(loop.snapshot());
+                        telemetry.recordClock(simClock.snapshot());
+                        if (!window.__worldloop.ready) {
+                            const s = telemetry.snapshot();
+                            window.__worldloop.drawCalls = s.drawCalls;
+                            window.__worldloop.fps = s.fps;
+                            window.__worldloop.triangles = s.triangles;
+                            window.__worldloop.ready = s.frames > 0 && s.drawCalls > 0;
+                        }
+                        teleTicker += frameDt;
+                        if (teleTicker >= 0.5 && teleDiv) {
+                            teleTicker = 0;
+                            const s = telemetry.snapshot();
+                            teleDiv.innerHTML = 'fps ' + s.fps + ' | dc ' + s.drawCalls;
+                        }
                     }
-                    neonBoost = Math.min(1, neonBoost / 24);
-                    const weatherState = weatherSystem ? weatherSystem.currentWeatherState : null;
-                    postFx.update(weatherState, neonBoost);
-                }
-
-                if (postFx && postFx.enabled) {
-                    postFx.render();
-                } else {
-                    renderer.render(scene, camera);
-                }
-
-                // [NEW] record real frame budget each frame
-                telemetry.recordFrame(dt, renderer.info.render.calls, renderer.info.render.triangles);
-                // [AAA-02] expose the frame-loop budget (clamped dt / skips).
-                telemetry.recordBudget(loop.snapshot());
-
-                // [CI] Mark readiness once the first frame has actually drawn.
-                if (!window.__worldloop.ready) {
-                    const s = telemetry.snapshot();
-                    window.__worldloop.drawCalls = s.drawCalls;
-                    window.__worldloop.fps = s.fps;
-                    window.__worldloop.triangles = s.triangles;
-                    window.__worldloop.ready = s.frames > 0 && s.drawCalls > 0;
-                }
-                teleTicker += dt;
-                if (teleTicker >= 0.5 && teleDiv) {
-                    teleTicker = 0;
-                    const s = telemetry.snapshot();
-                    teleDiv.innerHTML = 'fps ' + s.fps + ' | dc ' + s.drawCalls;
-                }
+                );
             } catch (err) {
                 console.error("Game Loop Error:", err);
             }

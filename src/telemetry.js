@@ -84,6 +84,16 @@ export class FrameBudgetTelemetry {
     return this;
   }
 
+  /**
+   * [AAA-04] Record the fixed-timestep clock budget each frame so telemetry
+   * exposes how many sim steps ran, how many were dropped by the frame-budget
+   * clamp, and whether the sim is paused.
+   */
+  recordClock(snap) {
+    this.clock = snap || null;
+    return this;
+  }
+
   snapshot() {
     return {
       frames: this.frames,
@@ -93,6 +103,7 @@ export class FrameBudgetTelemetry {
       instances: this.instances,
       triangles: this.triangles,
       loop: this.loop,
+      clock: this.clock,
       skippedFrames: this.skippedFrames,
       overBudgetFrames: this.overBudgetFrames,
       clampedDts: this.clampedDts
