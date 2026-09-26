@@ -556,6 +556,32 @@ player.weatherSystem = weather;
         !threw && trafficBiome === 'highway_x', 'threw=' + threw + ' biome=' + trafficBiome);
 }
 
+// ---- [LOD] No visible building drops to grey LOD ----
+// lodDistance must cover the square streaming radius (up to R*sqrt(2)), so
+// every LOADED chunk renders full detail (lodLevel 0), never grey. The old
+// lodDistance of 2 (vs renderDistance 3) greyed the whole outer ring.
+{
+    const scene = { add() {}, remove() {} };
+    const worldData = { blockSize: 20, roadWidth: 14 };
+    const player = { camera: { position: { x: 0, z: 0 } } }; // at chunk (0,0)
+    const noop = { loadChunk() {}, unloadChunk() {} };
+    const mgr = new ChunkManager(scene, player, worldData, noop, noop, noop, noop, noop);
+
+    // Far-corner chunk of the square load range (R=3 -> chunk (3,3), dist ~4.24).
+    mgr.loadChunk(3, 3);
+    const corner = mgr.chunks.get('3,3');
+    check('LOD: far-corner streamed chunk renders FULL detail (not grey)',
+        corner && corner.lodLevel === 0,
+        'lodLevel=' + (corner && corner.lodLevel));
+
+    // Edge chunk straight ahead (0,3), dist 3 — on the streaming boundary.
+    mgr.loadChunk(0, 3);
+    const edge = mgr.chunks.get('0,3');
+    check('LOD: straight-edge streamed chunk renders FULL detail (not grey)',
+        edge && edge.lodLevel === 0,
+        'lodLevel=' + (edge && edge.lodLevel));
+}
+
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------

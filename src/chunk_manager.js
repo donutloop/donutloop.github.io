@@ -83,7 +83,13 @@ export class ChunkManager {
         this.chunks = new Map(); // "x,z" -> chunkData
         this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
         this.renderDistance = 3; // chunks radius (Reduced for performance)
-        this.lodDistance = 2; // chunks radius (from PLAYER) inside which full detail; farther city chunks use low-poly LOD
+        // Full-detail radius covers the ENTIRE streamed world: the square load
+        // range spans up to R*sqrt(2) chunks, so lodDistance must be >= that.
+        // The old lodDistance of 2 (vs renderDistance 3) greyed the whole outer
+        // ring right at the viewport edge, making the city look grey as soon as
+        // the player left block 0. With lodDistance covering the streamed area,
+        // no visible building ever drops to the grey low-poly LOD.
+        this.lodDistance = this.renderDistance * 2; // chunks radius (from PLAYER) inside which full detail
 
         // [AAA-09] Uniform-grid spatial broadphase for STATIC colliders.
         // Cells align to the chunk grid; colliders are inserted once on

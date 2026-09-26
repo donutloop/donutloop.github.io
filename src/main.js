@@ -144,6 +144,9 @@ async function init() {
         chunkManager.renderDistance = Math.max(
             1, Math.round(chunkManager.renderDistance * settings.drawDistanceScale())
         );
+        // Keep the full-detail radius covering the whole streamed area so no
+        // visible building drops to the grey low-poly LOD (see chunk_manager).
+        chunkManager.lodDistance = chunkManager.renderDistance * 2;
 
         // Update player colliders immediately
         player.colliders = chunkManager.getColliders();
