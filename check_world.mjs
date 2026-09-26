@@ -943,8 +943,12 @@ if (process.argv.includes('--ci')) {
     QUALITY_LADDER[2].pixelRatioCap === 1.0 && QUALITY_LADDER[2].shadows === true,
     'ladder[2].pixelRatioCap=' + QUALITY_LADDER[2].pixelRatioCap + ' shadows=' + QUALITY_LADDER[2].shadows);
   check('governor disables shadows before shrinking radius',
-    QUALITY_LADDER[3].shadows === false && QUALITY_LADDER[3].drawDistanceScale === 1.0,
-    'ladder[3].shadows=' + QUALITY_LADDER[3].shadows + ' drawScale=' + QUALITY_LADDER[3].drawDistanceScale);
+    QUALITY_LADDER[5].shadows === false && QUALITY_LADDER[5].drawDistanceScale === 1.0,
+    'ladder[5].shadows=' + QUALITY_LADDER[5].shadows + ' drawScale=' + QUALITY_LADDER[5].drawDistanceScale);
+  check('governor uses DRS (sub-1x pixels) before disabling shadows',
+    QUALITY_LADDER[3].pixelRatioCap === 0.85 && QUALITY_LADDER[3].shadows === true &&
+    QUALITY_LADDER[4].pixelRatioCap === 0.70 && QUALITY_LADDER[4].shadows === true,
+    'ladder[3].cap=' + QUALITY_LADDER[3].pixelRatioCap + ' ladder[4].cap=' + QUALITY_LADDER[4].pixelRatioCap);
 
   // Recovery: feed 16ms (~62 FPS) for enough frames → must climb back.
   const g2 = new AdaptiveFrameGovernor({ targetFps: 60, cooldownMs: 100, recoverFrames: 60 });

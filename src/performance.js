@@ -24,12 +24,16 @@ export const QUALITY_LADDER = Object.freeze([
   { postFx: false, pixelRatioCap: null, shadows: true, drawDistanceScale: 1.00 },
   // level 2 — drop to 1x device pixels (no high-DPI supersampling)
   { postFx: false, pixelRatioCap: 1.0,  shadows: true, drawDistanceScale: 1.00 },
-  // level 3 — disable the shadow map (all shadow passes off)
-  { postFx: false, pixelRatioCap: 1.0,  shadows: false, drawDistanceScale: 1.00 },
-  // level 4 — shrink the chunk-streaming radius (fewer draw calls)
-  { postFx: false, pixelRatioCap: 1.0,  shadows: false, drawDistanceScale: 0.85 },
-  // level 5 — smallest radius / last resort
-  { postFx: false, pixelRatioCap: 1.0,  shadows: false, drawDistanceScale: 0.70 }
+  // level 3 — dynamic resolution scaling (render at 85% internal res, upscale)
+  { postFx: false, pixelRatioCap: 0.85, shadows: true, drawDistanceScale: 1.00 },
+  // level 4 — deeper DRS (70% internal res) before touching shadows
+  { postFx: false, pixelRatioCap: 0.70, shadows: true, drawDistanceScale: 1.00 },
+  // level 5 — disable the shadow map (all shadow passes off)
+  { postFx: false, pixelRatioCap: 0.70, shadows: false, drawDistanceScale: 1.00 },
+  // level 6 — shrink the chunk-streaming radius (fewer draw calls)
+  { postFx: false, pixelRatioCap: 0.70, shadows: false, drawDistanceScale: 0.85 },
+  // level 7 — smallest radius / last resort
+  { postFx: false, pixelRatioCap: 0.70, shadows: false, drawDistanceScale: 0.70 }
 ]);
 
 const EMA_SMOOTH = 0.8; // EMA keeps 80% of the previous value (~5-frame smoothing)
