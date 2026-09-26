@@ -269,9 +269,12 @@ async function init() {
                     (fixedDt) => {
                         if (chunkManager) {
                             chunkManager.update();   // exactly ONE sim update per frame
-                            // Update player colliders continuously as chunks load/unload
+                            // [AAA-09] Uniform-grid broadphase: only LOCAL static
+                            // colliders (nearby grid cells) + nearby dynamic ones —
+                            // replaces the per-frame full getColliders() concat.
                             if (player) {
-                                player.colliders = chunkManager.getColliders();
+                                const p = player.camera.position;
+                                player.colliders = chunkManager.getCollidersNear(p.x, p.z, chunkManager.chunkSize);
                             }
                         }
 

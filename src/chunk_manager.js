@@ -2,6 +2,73 @@ import * as THREE from 'three';
 import { SimplexNoise } from './noise.js';
 import { createCityChunk, createWastelandChunk, createHighwayChunk } from './world.js'; // We will assume these exist
 
+/**
+ * SpatialGrid — a uniform-grid broadphase (AAA-09).
+ *
+ * Static colliders (building/road Box3 from streamed chunks) are inserted ONCE
+ * on loadChunk and removed on unloadChunk — never rebuilt per frame. A query
+ * looks up only the grid cells overlapping a radius around a point, so the
+ * per-frame hot path (player collision) visits a small local subset instead of
+ * concatenating every collider in the render distance.
+ *
+ * Cell size matches the chunk grid (chunkSize), so a 1-chunk query touches at
+ * most 3x3 cells. Colliders are bucketed by their AABB center cell.
+ */
+export class SpatialGrid {
+    constructor(cellSize) {
+        this.cellSize = cellSize;
+        this.cells = new Map(); // "cx,cz" -> Box3[]
+        this.count = 0;         // total colliders bucketed
+    }
+
+    key(bx, bz) {
+        return `${Math.floor(bx / this.cellSize)},${Math.floor(bz / this.cellSize)}`;
+    }
+
+    insert(box) {
+        const cx = (box.min.x + box.max.x) / 2;
+        const cz = (box.min.z + box.max.z) / 2;
+        const k = this.key(cx, cz);
+        let arr = this.cells.get(k);
+        if (!arr) { arr = []; this.cells.set(k, arr); }
+        arr.push(box);
+        this.count++;
+    }
+
+    remove(box) {
+        const cx = (box.min.x + box.max.x) / 2;
+        const cz = (box.min.z + box.max.z) / 2;
+        const k = this.key(cx, cz);
+        const arr = this.cells.get(k);
+        if (!arr) return false;
+        const i = arr.indexOf(box);
+        if (i >= 0) { arr.splice(i, 1); this.count--; }
+        if (arr.length === 0) this.cells.delete(k);
+        return i >= 0;
+    }
+
+    /** All colliders whose cells overlap the radius box around (x,z). */
+    query(x, z, radius) {
+        const out = [];
+        const minCx = Math.floor((x - radius) / this.cellSize);
+        const maxCx = Math.floor((x + radius) / this.cellSize);
+        const minCz = Math.floor((z - radius) / this.cellSize);
+        const maxCz = Math.floor((z + radius) / this.cellSize);
+        for (let cx = minCx; cx <= maxCx; cx++) {
+            for (let cz = minCz; cz <= maxCz; cz++) {
+                const arr = this.cells.get(`${cx},${cz}`);
+                if (arr) out.push(...arr);
+            }
+        }
+        return out;
+    }
+
+    clear() {
+        this.cells.clear();
+        this.count = 0;
+    }
+}
+
 export class ChunkManager {
     constructor(scene, player, worldData, trafficSystem, parkingSystem, pedestrianSystem, trafficLightSystem, constructionSystem) {
         this.scene = scene;
@@ -17,6 +84,11 @@ export class ChunkManager {
         this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
         this.renderDistance = 3; // chunks radius (Reduced for performance)
         this.lodDistance = 2; // chunks radius (from PLAYER) inside which full detail; farther city chunks use low-poly LOD
+
+        // [AAA-09] Uniform-grid spatial broadphase for STATIC colliders.
+        // Cells align to the chunk grid; colliders are inserted once on
+        // loadChunk and removed on unloadChunk — never rebuilt per frame.
+        this.grid = new SpatialGrid(this.chunkSize);
 
         // Seed randomness
         this.noise = SimplexNoise;
@@ -146,6 +218,12 @@ export class ChunkManager {
         if (chunkData.mesh) this.scene.add(chunkData.mesh);
 
         this.chunks.set(`${cx},${cz}`, chunkData);
+
+        // [AAA-09] Bucket static colliders into the broadphase grid ONCE on
+        // stream — never per frame. Each Box3 is inserted by its center cell.
+        if (chunkData.colliders) {
+            for (const box of chunkData.colliders) this.grid.insert(box);
+        }
     }
 
     unloadChunk(id) {
@@ -153,6 +231,11 @@ export class ChunkManager {
         if (chunk) {
             if (chunk.mesh) {
                 this.scene.remove(chunk.mesh);
+            }
+
+            // [AAA-09] Drop the chunk's static colliders out of the broadphase grid.
+            if (chunk.colliders) {
+                for (const box of chunk.colliders) this.grid.remove(box);
             }
 
             // Unload population
@@ -200,5 +283,38 @@ export class ChunkManager {
         }
 
         return allColliders;
+    }
+
+    /**
+     * [AAA-09] Broadphase collision query — replaces the per-frame
+     * getColliders() concat on the hot path.
+     *
+     * Static chunk colliders come from the uniform grid: only the grid cells
+     * overlapping a radius box around (x,z) are visited, so the returned array
+     * is a small LOCAL subset instead of every collider in the render distance.
+     * Dynamic colliders (parking + traffic) are appended distance-culled, since
+     * they move per frame and are not bucketed in the static grid.
+     */
+    getCollidersNear(x, z, radius = this.chunkSize) {
+        // Static broadphase subset (uniform grid).
+        const near = this.grid.query(x, z, radius);
+
+        // Dynamic colliders within the query radius (distance-culled).
+        if (this.parkingSystem) {
+            for (const box of this.parkingSystem.getColliders()) {
+                const cx = (box.min.x + box.max.x) / 2;
+                const cz = (box.min.z + box.max.z) / 2;
+                if (Math.abs(cx - x) <= radius && Math.abs(cz - z) <= radius) near.push(box);
+            }
+        }
+        if (this.trafficSystem) {
+            for (const box of this.trafficSystem.getColliders()) {
+                const cx = (box.min.x + box.max.x) / 2;
+                const cz = (box.min.z + box.max.z) / 2;
+                if (Math.abs(cx - x) <= radius && Math.abs(cz - z) <= radius) near.push(box);
+            }
+        }
+
+        return near;
     }
 }

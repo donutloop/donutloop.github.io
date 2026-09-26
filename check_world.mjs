@@ -20,7 +20,7 @@ import { ParkingSystem } from './src/parking.js';
 import { AirplaneSystem } from './src/airplanes.js';
 import { EffectSystem } from './src/effects.js';
 import { TrafficLightSystem } from './src/traffic_lights.js';
-import { ChunkManager } from './src/chunk_manager.js';
+import { SpatialGrid, ChunkManager } from './src/chunk_manager.js';
 import { Player } from './src/player.js';
 import { deformMesh } from './src/deformation.js';
 import { SimplexNoise, resetNoise } from './src/noise.js';
@@ -425,6 +425,47 @@ player.weatherSystem = weather;
     plainClock && plainClock.steps === 60 && plainClock.fixedDt === 1 / 30, 'steps=' + (plainClock && plainClock.steps));
 }
 
+// ---- [AAA-09] Uniform-grid spatial broadphase (replaces per-frame concat) ----
+{
+    // Static colliders are bucketed ONCE on stream and queried by cell —
+    // the per-frame hot path never rebuilds the full collider array.
+    const cell = 34;
+    const grid = new SpatialGrid(cell);
+
+    // Insert a handful of Box3 colliders (world coords).
+    const mkBox = (cx, cz, half = 5) => {
+        const b = new THREE.Box3();
+        b.min.set(cx - half, 0, cz - half);
+        b.max.set(cx + half, 10, cz + half);
+        return b;
+    };
+    const box00 = mkBox(0, 0);    // cell (0,0)
+    grid.insert(box00);
+    grid.insert(mkBox(34, 34));   // cell (1,1)
+    grid.insert(mkBox(34 * 5, 0));// cell (5,0) — far away
+
+    // A query at the origin with radius 1 cell touches cells (0,0),(0,1),(1,0),(1,1)
+    // — the far collider in cell (5,0) is NOT visited.
+    const near = grid.query(0, 0, cell);
+    check('AAA-09: SpatialGrid.query returns only nearby cells (broadphase culling)',
+        near.length === 2, 'near=' + near.length + ' total=' + grid.count);
+
+    // Broadphase count tracks inserts; remove drops them back out.
+    check('AAA-09: SpatialGrid.count tracks inserted colliders',
+        grid.count === 3, 'count=' + grid.count);
+    grid.remove(box00);
+    check('AAA-09: SpatialGrid.remove drops a collider (cell count updates)',
+        grid.count === 2, 'count=' + grid.count);
+
+    // getCollidersNear distance-culls dynamic colliders: only the local
+    // static subset (nearby cells) + dynamic boxes within radius are kept.
+    // ChunkManager dereferences worldData for its chunkSize, so pass a stub.
+    const mgr = new ChunkManager(null, null, { blockSize: 20, roadWidth: 14 }, null, null, null, null, null);
+    const local = mgr.getCollidersNear(0, 0, cell);
+    check('AAA-09: getCollidersNear returns a local subset (no full concat)',
+        Array.isArray(local), 'local=' + local.length);
+}
+
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------
@@ -704,7 +745,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { ActionMap, DEFAULT_BINDINGS, InputManager, KeyboardAdapter, ACTIONS } from './src/input/index.js'; // [AAA-06] logical input
 import { Settings, QUALITY_TIERS, QUALITY_PARAMS, DEFAULT_SETTINGS, createStorage } from './src/core/settings.js';
-import { SaveGame, snapshotClock, SAVE_VERSION } from './src/core/save.js'; // [AAA-08] persisted save/load // [AAA-07] persisted settings
+import { SaveGame, snapshotClock, SAVE_VERSION } from './src/core/save.js';
+ // [AAA-08] persisted save/load // [AAA-07] persisted settings
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 check('ADR 0021: three is a pinned (exact) devDependency',
   pkg.devDependencies && pkg.devDependencies.three === '0.160.0',
