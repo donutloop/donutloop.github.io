@@ -1,5 +1,7 @@
 {
   "round": 2,
-  "lastCommit": "8d08ef8d052d57c8bebc919a9903d3b9600f3598",
-  "finishedAt": "2026-09-26T07:54:03.384Z"
+  "feature": "AAA-05 App state machine (core/app.js)",
+  "lastCommit": "b3307a4",
+  "checks": 106,
+  "finishedAt": "2026-09-26T09:20:00.000Z"
 }
