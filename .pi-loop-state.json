@@ -1,6 +1,5 @@
 {
-  "round": 2,
-  "feature": "AAA-02 frame loop: one update/frame, clamped dt, frame budget",
-  "checksPassed": 82,
-  "lastCommit": "AAA-02 frame loop hygiene"
+  "round": 3,
+  "lastCommit": "aefe363c69fa47d46e069f16cb4441a396d11ec9",
+  "finishedAt": "2026-09-26T06:31:42.338Z"
 }

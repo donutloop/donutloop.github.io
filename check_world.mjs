@@ -23,7 +23,8 @@ import { TrafficLightSystem } from './src/traffic_lights.js';
 import { ChunkManager } from './src/chunk_manager.js';
 import { Player } from './src/player.js';
 import { deformMesh } from './src/deformation.js';
-import { SimplexNoise } from './src/noise.js';
+import { SimplexNoise, resetNoise } from './src/noise.js';
+import { setSeed, getSeed, DEFAULT_SEED, RNG } from './src/core/rng.js'; // [AAA-03] seeded deterministic RNG
 import { FrameBudgetTelemetry } from './src/telemetry.js';
 import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
 import { EmergencySystem } from './src/emergency.js';
@@ -296,6 +297,27 @@ const n1 = SimplexNoise.noise2D(0.5, 0.5);
 const n2 = SimplexNoise.noise2D(0.5, 0.5);
 check('SimplexNoise.noise2D deterministic in-session', n1 === n2, 'n=' + n1);
 check('SimplexNoise.noise2D returns finite number', Number.isFinite(n1));
+
+// ---- 12b. AAA-03: seeded deterministic RNG -----------------------------------------
+// Two RNGs with the same seed must produce the same sequence (no Math.random).
+const rngA = new RNG(42);
+const rngB = new RNG(42);
+check('AAA-03: RNG deterministic — same seed -> same sequence',
+  rngA.float() === rngB.float() && rngA.float() === rngB.float(),
+  'a=' + rngA.float() + ' b=' + rngB.float());
+
+// Different seeds -> different noise worlds (seed actually feeds the permutation).
+setSeed(1); resetNoise(); const seed1 = SimplexNoise.noise2D(0.5, 0.5);
+setSeed(2); resetNoise(); const seed2 = SimplexNoise.noise2D(0.5, 0.5);
+check('AAA-03: noise seeded — different seeds -> different worlds', Math.abs(seed1 - seed2) > 1e-9,
+  'seed1=' + seed1.toFixed(6) + ' seed2=' + seed2.toFixed(6));
+check('AAA-03: getSeed reflects setSeed', getSeed() === 2, 'seed=' + getSeed());
+
+// Restore the canonical world seed so later checks see a stable permutation.
+setSeed(DEFAULT_SEED); resetNoise();
+const nA = SimplexNoise.noise2D(0.5, 0.5);
+check('AAA-03: DEFAULT_SEED world is reproducible (stable sample)',
+  Number.isFinite(nA) && Math.abs(nA - seed2) > 1e-9, 'n=' + nA.toFixed(6));
 
 // ---- 13. Wiring (main.js instantiates every system) --------------------------------
 const mainSrc = fs.readFileSync('src/main.js', 'utf8');

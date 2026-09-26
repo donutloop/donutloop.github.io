@@ -16,6 +16,7 @@ import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget tel
 import { RoadGraph } from './road_graph.js'; // [NEW] implicit road-network graph
 import { Minimap } from './minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 import { FrameLoop } from './loop.js'; // [AAA-02] frame loop hygiene
+import { setSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
 
 let player;
 let cubes = [];
@@ -62,6 +63,10 @@ window.addEventListener('error', (e) => {
 
 async function init() {
     initScore();
+    // [AAA-03] Seed the global deterministic RNG before building any world
+    // geometry, so the noise permutation (and every seeded system) is
+    // reproducible. Later settings/AAA-07 can read this seed from storage.
+    setSeed(DEFAULT_SEED);
     // document.body.style.background = 'red'; // DEBUG: Verify JS runs
     try {
         const { scene, camera, renderer } = initScene();
