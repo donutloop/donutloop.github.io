@@ -9,6 +9,7 @@
     "test": "node check_world.mjs",
     "test:runner": "node tools/test/runner.mjs",
     "test:runner:json": "node tools/test/runner.mjs --json",
+    "test:snapshot": "node tools/test/runner.mjs tools/test/suites/snapshot_sim.mjs",
     "typecheck": "node build/typecheck.mjs"
   },
   "devDependencies": {
