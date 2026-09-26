@@ -175,8 +175,23 @@ async function main() {
   if (filesToLoad.length === 0) {
     filesToLoad = readdirSync(SUITES_DIR).filter(f => f.endsWith('.mjs')).map(f => join(SUITES_DIR, f));
   }
-  for (const f of filesToLoad) await loadSuite(f, runner);
-  await runner.run();
+
+  // Machine-readable JSON must not be polluted by sim console.log (e.g. the
+  // WeatherSystem constructor logs on construction), so silence stdout during
+  // load+run when emitting JSON.
+  let silence = null;
+  if (jsonFlag) {
+    silence = { log: console.log, warn: console.warn, info: console.info };
+    console.log = console.warn = console.info = () => {};
+  }
+  try {
+    for (const f of filesToLoad) await loadSuite(f, runner);
+    await runner.run();
+  } finally {
+    if (silence) {
+      console.log = silence.log; console.warn = silence.warn; console.info = silence.info;
+    }
+  }
 
   const meta = { durationMs: runner.durationMs, seed: runner.baseSeed };
   if (jsonFlag) {
