@@ -107,9 +107,7 @@ async function init() {
         let lastShadows = settings.shadowMap();
         let lastDrawScale = settings.drawDistanceScale();
         let lastPostFx = settings.postFxEnabled();
-        chunkManager.renderDistance = Math.max(1, Math.round(
-            chunkManager.renderDistance * settings.drawDistanceScale()
-        ));
+        // note: render distance is scaled once chunkManager exists (see init)
         if (postFx.enabled) {
             window.addEventListener('resize', () => postFx.resize());
         }
