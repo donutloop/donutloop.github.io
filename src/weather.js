@@ -566,6 +566,8 @@ export class WeatherSystem {
             const offC = new THREE.Color(0x111111);
             const onC = new THREE.Color(0xffffaa);
             this.materials.window.color.lerpColors(offC, onC, windowInt);
+            // Windows are near-invisible by day and warm-glowing by night.
+            this.materials.window.opacity = 0.08 + windowInt * 0.92;
         }
     }
 

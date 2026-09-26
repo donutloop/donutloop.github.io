@@ -155,7 +155,7 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - Every feature must keep both paths green: browser render + `check_world.mjs`.
 
 
-## Phase 6 — living skyline (active construction sites)
+## Phase 6 — living skyline (active construction sites) ✅ DONE
 
 - New `src/construction.js` `ConstructionSystem` — animates tower cranes at active construction sites.
 - `world.js` `createCityChunk` now deterministically turns some corner lots into construction sites:
@@ -170,6 +170,19 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
   jib rotation advances by `delta * SPEED`, and `main.js` wires `ConstructionSystem`.
 - ADR-0019 documents the decision (deterministic construction placement + animated crane system).
 
+## Phase 7 — city at night (window illumination)
+
+- Night-time window illumination: buildings get emissive "lit window" panels on their road-facing
+  facades, driven by the day/night cycle. At night windows glow warm yellow; by day they dim to
+  near-invisible dark panels.
+- `world.js`: `matWindow` (transparent warm MeshBasicMaterial) added to the shared material cache as
+  `window`; `addWindowLights` lays a deterministic grid of lit windows (SimplexNoise over position, so
+  the same building always shows the same lit windows), merged into a single InstancedMesh.
+- `weather.js`: completes the previously-dangling `materials.window` reference — `updateTimeCycle`
+  now modulates window color AND opacity (0.08 day → 1.0 night).
+- Verified in `check_world.mjs`: `world.materials.window` present, window panels merged as an
+  InstancedMesh sharing `world.materials.window`, and weather lights windows at night / dims by day.
+- ADR-0020 documents the decision (night-time window illumination via shared emissive material).
 
 ## Definition of done
 

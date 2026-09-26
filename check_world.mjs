@@ -104,6 +104,9 @@ check('world.createWorld returns full surface', worldKeys.every(k => k in world)
 check('world.materials cache (road/sidewalk/building)',
   ['road', 'sidewalk', 'building'].every(k => k in world.materials),
   'materials=' + Object.keys(world.materials).join(','));
+check('world.materials.window present (night-time window illumination)',
+  'window' in world.materials && world.materials.window.transparent === true,
+  'materials=' + Object.keys(world.materials).join(','));
 const cityChunk = createCityChunk(0, 0, world.blockSize);
 const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
   const instMeshes = cityChunk.mesh.children.filter(c => c.isInstancedMesh);
@@ -141,6 +144,16 @@ const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
   }
   check('ChunkManager -> lodDistance detail radius', chunkManager.lodDistance >= 1, 'lodDistance=' + chunkManager.lodDistance);
 check('world.createCityChunk -> {mesh,colliders}', cityChunk.mesh instanceof THREE.Group && Array.isArray(cityChunk.colliders));
+check('window-illumination panels merged into an InstancedMesh (matWindow)',
+  (() => {
+    let found = 0;
+    cityChunk.mesh.traverse(c => { if (c.isInstancedMesh && c.material === world.materials.window) found++; });
+    return found > 0;
+  })(),
+  'windowMeshCount=' + (() => {
+    let n = 0; cityChunk.mesh.traverse(c => { if (c.isInstancedMesh && c.material === world.materials.window) n++; });
+    return n;
+  })());
 check('world.createWastelandChunk -> {mesh,colliders}', wasteChunk.mesh instanceof THREE.Group && Array.isArray(wasteChunk.colliders));
 
 // ---- 2. Traffic -----------------------------------------------------------
@@ -207,6 +220,18 @@ check('weather.day derived from real-world date', weather.day === expectedDay,
   'day=' + weather.day + ' expected=' + expectedDay);
 weather.update(0.1);
 check('weather.update(0.1) runs', true, 'ok');
+check('window material lights at night, dims by day (updateTimeCycle)',
+  (() => {
+    const pos = { x: 0, z: 0 };
+    weather.gameTime = 22; weather.updateTimeCycle(pos);   // night
+    const nightOn = world.materials.window.opacity > 0.9
+      && world.materials.window.color.g > 0.3 && world.materials.window.color.b > 0.3;
+    weather.gameTime = 12; weather.updateTimeCycle(pos);   // noon
+    const dayDim = world.materials.window.opacity < 0.5
+      && world.materials.window.color.g < 0.3 && world.materials.window.color.b < 0.3;
+    return nightOn && dayDim;
+  })(),
+  'nightOpacity=' + (weather.gameTime = 22, weather.updateTimeCycle({ x: 0, z: 0 }), world.materials.window.opacity.toFixed(2)));
 
 // ---- 4. Pedestrians ---------------------------------------------------------
 pedestrians.update(0.1);

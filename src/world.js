@@ -70,6 +70,16 @@ const matLane = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const matCloud = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true, opacity: 0.8 });
 const matLight = new THREE.MeshBasicMaterial({ color: 0xffffaa }); // Streetlight bulb
 
+// Night-time window illumination — a warm emissive panel per lit window. Its
+// color/opacity are driven by the day/night cycle (see weather.js updateTimeCycle):
+// dark + near-invisible by day, warm glowing by night.
+const matWindow = new THREE.MeshBasicMaterial({
+    color: 0x111111,
+    transparent: true,
+    opacity: 0.0,
+    depthWrite: false
+});
+
 // Tree Materials
 const matTrunkBrown = new THREE.MeshStandardMaterial({ color: 0x553311, roughness: 0.9, name: 'trunkBrown' });
 const matTrunkWhite = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.8, name: 'trunkWhite' });
@@ -332,6 +342,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
         metal: [],
         darkMetal: [],
         neon: [],
+        windowLights: [],
         // Vegetation
         trunkBrown: [], trunkWhite: [], trunkGrey: [], trunkBlack: [],
         leafGreen: [], leafDark: [], leafPink: [], leafOrange: [], leafYellow: [], dirt: [],
@@ -408,6 +419,10 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
 
                 // Pass accumulator
                 createBuildingMesh(cx, cz, bw, bh, bw, style, chunkGeoms);
+
+                // Night-time window illumination: emissive lit-window panels on
+                // the road-facing facades, driven by the day/night cycle.
+                addWindowLights(chunkGeoms, cx, cz, bw, bh);
 
                 // Collider (Keep separate for physics)
                 const box3 = new THREE.Box3();
@@ -499,6 +514,10 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
     addBuildingInsts(chunkGroup, chunkGeoms.darkMetal, matDarkMetal);
     addBuildingInsts(chunkGroup, chunkGeoms.neon, matNeonCyan); // Simplify to one neon color for Batch? 
     // Or split neon arrays. For now, one color is fine for performance.
+
+    // Night-time window illumination — merged into a single InstancedMesh;
+    // matWindow is shared so weather.js can light all windows at once.
+    addBuildingInsts(chunkGroup, chunkGeoms.windowLights, matWindow);
 
     addClean(chunkGeoms.trunkBrown, matTrunkBrown);
     addClean(chunkGeoms.trunkWhite, matTrunkWhite);
@@ -636,6 +655,52 @@ function buildConstructionSite(group, chunkGeoms, colliders, cx, cz, cornerSize)
     return { pivot, hook, cable, jibLen, phase: 0, cx, cz };
 }
 
+/**
+ * addWindowLights — lays a deterministic grid of emissive "lit window" panels
+ * on the road-facing facades of a building. A window is lit when its position
+ * noise crosses a threshold, so the same building always shows the same lit
+ * windows across reloads (SimplexNoise is deterministic over coordinates).
+ * The panels are merged into a single InstancedMesh using matWindow; the
+ * day/night cycle (weather.js) toggles their color + opacity.
+ */
+function addWindowLights(geoms, cx, cz, bw, bh) {
+    if (bw <= 0 || bh <= 0) return;
+    const cols = Math.max(3, Math.floor(bw / 3));
+    const rows = Math.max(2, Math.floor(bh / 3.5));
+    const winW = bw / cols;
+    const winH = bh / rows;
+    // The building sits in a corner lot; its facade(s) facing the road (the
+    // chunk origin) are the ones whose outward normal points toward (0,0).
+    const dirX = cx < 0 ? 1 : -1;
+    const dirZ = cz < 0 ? 1 : -1;
+    const lit = (wx, wz, wy) =>
+        SimplexNoise.noise2D(wx * 0.27 + wz * 0.11, wy * 0.17) > 0.25;
+
+    // Road-facing X face: a slab at x = fx spanning z.
+    const fx = cx + dirX * (bw / 2);
+    for (let r = 0; r < rows; r++) {
+        const wy = 2 + winH / 2 + r * winH;
+        for (let c = 0; c < cols; c++) {
+            const wz = cz - bw / 2 + winW / 2 + c * winW;
+            if (lit(fx, wz, wy)) {
+                geoms.windowLights.push(box(winW * 0.45, winH * 0.55, 0.2, fx, wy, wz));
+            }
+        }
+    }
+
+    // Road-facing Z face: a slab at z = fz spanning x.
+    const fz = cz + dirZ * (bw / 2);
+    for (let r = 0; r < rows; r++) {
+        const wy = 2 + winH / 2 + r * winH;
+        for (let c = 0; c < cols; c++) {
+            const wx = cx - bw / 2 + winW / 2 + c * winW;
+            if (lit(wx, fz, wy)) {
+                geoms.windowLights.push(box(winW * 0.45, winH * 0.55, 0.2, wx, wy, fz));
+            }
+        }
+    }
+}
+
 export async function createWorld(scene) {
     const ambientLight = new THREE.AmbientLight(0x222233, 0.3);
     scene.add(ambientLight);
@@ -667,7 +732,8 @@ export async function createWorld(scene) {
             glassOffice: matGlassOffice,
             metal: matMetal,
             darkMetal: matDarkMetal,
-            cloud: matCloud
+            cloud: matCloud,
+            window: matWindow
         }
     };
 }
