@@ -354,6 +354,77 @@ player.weatherSystem = weather;
       wiredIM.map instanceof ActionMap && wiredIM.map.codesFor('moveForward').includes('KeyW'),
       'codes=' + wiredIM.map.codesFor('moveForward'));
 
+// ---- [AAA-08] core/save.js — replay-safe save/load (seed + player + progress) ----
+{
+  const memSave = createStorage();
+  const saveGame = new SaveGame({ storage: memSave, key: 'worldloop.save.test' });
+
+  // Replay-safe fixture: deterministic world seed + player + sim-clock state.
+  const fakePlayer = {
+    currentCar: null,
+    camera: { position: { x: 12, y: 2, z: -34 } },
+    carVelocity: 0, carSteering: 0, spinVelocity: 0, shakeIntensity: 0
+  };
+  const fakeClock = {
+    snapshot() { return { fixedDt: 1 / 30, maxStepsPerFrame: 4, accumulator: 0.02, paused: false, frames: 100, steps: 3000, dropped: 0, alpha: 0.6 }; }
+  };
+
+  const snap = saveGame.capture({
+    seed: DEFAULT_SEED, player: fakePlayer, simClock: fakeClock,
+    progress: { score: 42, events: 7 }, meta: { slot: 'test' }
+  });
+  check('AAA-08: capture builds a replay-safe snapshot (seed+player+clock+progress)',
+    snap && snap.version === SAVE_VERSION && snap.seed === DEFAULT_SEED &&
+    snap.player.position.x === 12 && snap.player.isDriving === false &&
+    snap.progress.score === 42 && snap.progress.events === 7 &&
+    snap.progress.simTime === 100,
+    'v=' + (snap && snap.version) + ' seed=' + (snap && snap.seed) + ' simTime=' + (snap && snap.progress && snap.progress.simTime));
+
+  // serialize -> fromJSON round-trip preserves the full record (replay-safe).
+  const json = saveGame.serialize();
+  const revived = new SaveGame({ storage: memSave, key: 'worldloop.save.revive' }).fromJSON(json);
+  check('AAA-08: serialize/fromJSON round-trips the full record',
+    !!revived && revived.seed === DEFAULT_SEED && revived.player.position.z === -34 &&
+    revived.progress.events === 7 && revived.simClock.steps === 3000,
+    'revived=' + !!revived);
+
+  // save/load through the Node-safe storage shim.
+  saveGame.save();
+  const loaded = new SaveGame({ storage: memSave, key: 'worldloop.save.test' }).load();
+  check('AAA-08: save/load round-trips through the storage shim',
+    !!loaded && loaded.seed === DEFAULT_SEED && loaded.player.position.x === 12 &&
+    loaded.progress.score === 42 && loaded.simClock.steps === 3000,
+    'loaded=' + !!loaded);
+
+  // Replay-safety: two captures over identical state must fingerprint identically.
+  const f1 = saveGame.fingerprint();
+  const saveGame2 = new SaveGame({ storage: memSave, key: 'worldloop.save.test2' });
+  saveGame2.capture({
+    seed: DEFAULT_SEED, player: fakePlayer, simClock: fakeClock,
+    progress: { score: 42, events: 7 }, meta: { slot: 'test' }
+  });
+  const f2 = saveGame2.fingerprint();
+  check('AAA-08: fingerprint is deterministic across captures (replay-safe)',
+    f1 === f2, 'f1=' + f1 + ' f2=' + f2);
+
+  // restore() resumes player position + sim-clock position back onto live state.
+  const restoreTarget = {
+    camera: { position: new THREE.Vector3() }, currentCar: null,
+    carVelocity: 0, carSteering: 0, spinVelocity: 0, shakeIntensity: 0
+  };
+  const restoreClock = { steps: 0, accumulator: 0 };
+  saveGame.restore({ player: restoreTarget, simClock: restoreClock });
+  check('AAA-08: restore() resumes player position + sim-clock position',
+    restoreTarget.camera.position.x === 12 && restoreTarget.camera.position.z === -34 &&
+    restoreClock.steps === 3000 && restoreClock.accumulator === 0.02,
+    'posX=' + restoreTarget.camera.position.x + ' posZ=' + restoreTarget.camera.position.z + ' steps=' + restoreClock.steps);
+
+  // snapshotClock accepts a pre-snapshotted plain clock object (Node-safe).
+  const plainClock = snapshotClock({ fixedDt: 1 / 30, steps: 60 });
+  check('AAA-08: snapshotClock normalizes a plain clock snapshot',
+    plainClock && plainClock.steps === 60 && plainClock.fixedDt === 1 / 30, 'steps=' + (plainClock && plainClock.steps));
+}
+
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------
@@ -632,7 +703,8 @@ check('minimap 2d-draw disabled on Node but logic deterministic',
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { ActionMap, DEFAULT_BINDINGS, InputManager, KeyboardAdapter, ACTIONS } from './src/input/index.js'; // [AAA-06] logical input
-import { Settings, QUALITY_TIERS, QUALITY_PARAMS, DEFAULT_SETTINGS, createStorage } from './src/core/settings.js'; // [AAA-07] persisted settings
+import { Settings, QUALITY_TIERS, QUALITY_PARAMS, DEFAULT_SETTINGS, createStorage } from './src/core/settings.js';
+import { SaveGame, snapshotClock, SAVE_VERSION } from './src/core/save.js'; // [AAA-08] persisted save/load // [AAA-07] persisted settings
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 check('ADR 0021: three is a pinned (exact) devDependency',
   pkg.devDependencies && pkg.devDependencies.three === '0.160.0',

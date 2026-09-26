@@ -18,10 +18,11 @@ import { Minimap } from './minimap.js'; // [NEW] Round 9 — minimap / district-
 import { FrameLoop } from './loop.js'; // [AAA-02] frame loop hygiene
 import { FixedTimestep } from './core/time.js'; // [AAA-04] fixed-timestep core
 import { App, APP_STATES } from './core/app.js'; // [AAA-05] App state machine
-import { setSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
+import { setSeed, getSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
 import { InputManager } from './input/index.js'; // [AAA-06] unified logical input
 import { ActionMap } from './input/action_map.js'; // [AAA-06] action->code map
-import { Settings, createStorage } from './core/settings.js'; // [AAA-07] persisted settings (quality/remap/audio)
+import { Settings, createStorage } from './core/settings.js';
+import { SaveGame } from './core/save.js'; // [AAA-08] persisted save/load (seed + player + progress) // [AAA-07] persisted settings (quality/remap/audio)
 
 let player;
 let cubes = [];
@@ -235,6 +236,25 @@ async function init() {
         inputManager.onPause = () => app.togglePause();
         inputManager.onLock = () => player.controls.lock();
         window.__worldloop.simClock = simClock;
+
+        // [AAA-08] Replay-safe save/load — serialize seed + player state +
+        // progress (ADR 0022/0023). The world is seeded deterministically, so
+        // restoring the seed + sim-clock position + player state reproduces a
+        // run. Exposed machine-readable on window for the browser path; the
+        // Node harness verifies capture/serialize/restore determinism.
+        const saveGame = new SaveGame();
+        window.saveGame = saveGame;
+        window.__worldloop.saveGame = saveGame;
+        saveGame.capture({
+            seed: getSeed(),
+            player,
+            simClock,
+            progress: { score, events: emergencySystem.events },
+            meta: { slot: 'autosave', label: 'worldloop' }
+        });
+        // capture() returns the plain snapshot, not the instance — persist
+        // via an explicit save() call (ADR 0028).
+        saveGame.save();
 
         // [AAA-05] World + systems are wired: enter the playing state, which
         // resumes the sim clock (frozen during boot/loading).

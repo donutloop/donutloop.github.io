@@ -30,6 +30,10 @@ the one it replaces.
 | 0022 | Seeded deterministic RNG + fixed-timestep core | Accepted |
 | 0023 | Layered architecture: App state machine, input abstraction, settings/save | Accepted |
 | 0024 | AAA verification gates + asset/audio pipeline | Accepted |
+| 0025 | Frame loop hygiene: one update per frame, clamped dt, frame budget (AAA-02) | Accepted |
+| 0026 | Unified logical input (AAA-06) | Accepted |
+| 0027 | Persisted settings (AAA-07) | Accepted |
+| 0028 | Replay-safe save/load — `core/save.js` (AAA-08) | Accepted |
 
-Newest decisions (0021–0024) are the foundation for the AAA migration phases in
+Newest decisions (0021–0028) are the foundation for the AAA migration phases in
 `roadmap.md` Phase 8+; the full migration plan lives in `docs/aaa-migration-plan.md`.
