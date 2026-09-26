@@ -1,9 +1,14 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { deformMesh } from './deformation.js';
+import { InputManager } from './input/index.js'; // [AAA-06] player consumes logical actions, owns no raw DOM input
 
 export class Player {
-    constructor(camera, domElement, colliders = [], trafficSystem = null, parkingSystem = null, effectSystem = null, weatherSystem = null) {
+    constructor(camera, domElement, colliders = [], trafficSystem = null, parkingSystem = null, effectSystem = null, weatherSystem = null, input = null) {
+        // [AAA-06] Player consumes an InputManager (logical actions/events). If
+        // none is injected, build one over domElement so player stays decoupled
+        // from any raw DOM input binding.
+        this.input = input || new InputManager({ dom: domElement });
         this.camera = camera;
         this.domElement = domElement;
         this.colliders = colliders;
@@ -13,10 +18,10 @@ export class Player {
         this.weatherSystem = weatherSystem; // [NEW] weather-reactive driving
         this.controls = new PointerLockControls(camera, domElement);
 
-        this.moveForward = false;
-        this.moveBackward = false;
-        this.moveLeft = false;
-        this.moveRight = false;
+        this.input.actions.moveForward = false;
+        this.input.actions.moveBackward = false;
+        this.input.actions.moveLeft = false;
+        this.input.actions.moveRight = false;
         this.canJump = false;
 
         this.isDriving = false;
@@ -37,32 +42,8 @@ export class Player {
     }
 
     init() {
-        const instructions = document.createElement('div');
-        instructions.style.position = 'absolute';
-        instructions.style.top = '0';
-        instructions.style.left = '0';
-        instructions.style.width = '100%';
-        instructions.style.height = '100%';
-        instructions.style.display = 'flex';
-        instructions.style.alignItems = 'center';
-        instructions.style.justifyContent = 'center';
-        instructions.style.background = 'rgba(0,0,0,0.8)';
-        instructions.style.zIndex = '1000'; // Force On Top
-        instructions.style.cursor = 'pointer';
-        instructions.style.color = '#ffffff';
-        instructions.style.fontSize = '24px';
-        instructions.style.fontFamily = 'sans-serif';
-        instructions.style.flexDirection = 'column';
-        instructions.style.textAlign = 'center';
-        instructions.innerHTML = `
-            <h1>Worldloop</h1>
-            <p style="font-size: 18px; margin-top: 20px;">
-                WASD = Move | Mouse = Look<br>
-                ENTER = Enter/Exit Car<br>
-                1, 2, 3 = Change Weather
-            </p>
-        `;
-        document.body.appendChild(instructions);
+    // [AAA-06] The "click to play" overlay + click-to-lock DOM binding now live
+    // in the MouseAdapter (src/input/mouse.js). Player owns no raw mouse input.
         // DEBUG OVERLAY
         const debugDiv = document.createElement('div');
         debugDiv.style.position = 'absolute';
@@ -86,92 +67,35 @@ export class Player {
             return;
         }
 
-        const lock = () => {
-            updateDebug('ATTEMPTING LOCK...');
-            this.controls.lock();
-        };
-
-        instructions.addEventListener('click', () => {
-            lock();
-        });
-
-        this.controls.addEventListener('lock', () => {
-            instructions.style.display = 'none';
-            updateDebug('LOCKED - USE WASD');
-        });
-
-        this.controls.addEventListener('unlock', () => {
-            instructions.style.display = 'flex';
-            updateDebug('UNLOCKED - CLICK TO PLAY');
-        });
-
-        document.addEventListener('keydown', (event) => {
-            // Also log key presses to see if keyboard is working
-            if (this.controls.isLocked) {
-                updateDebug(`KEY: ${event.code}`);
-            }
-            if (event.code === 'Enter') {
-                lock();
-            }
-            this.onKeyDown(event)
-        });
-        document.addEventListener('keyup', (event) => this.onKeyUp(event));
+    this.controls.addEventListener('lock', () => {
+      this.input.setLocked(true);
+      updateDebug('LOCKED');
+    });
+    this.controls.addEventListener('unlock', () => {
+      this.input.setLocked(false);
+      updateDebug('UNLOCKED');
+    });
+    // [AAA-06] Raw keydown/keyup/click DOM bindings removed - logical actions
+    // come from the InputManager (src/input/); pointer-lock is engaged by the
+    // MouseAdapter click-to-lock and the keyboard 'lock' action (Enter).
     }
 
-    onKeyDown(event) {
-        switch (event.code) {
-            case 'ArrowUp':
-            case 'KeyW':
-                this.moveForward = true;
-                break;
-            case 'ArrowLeft':
-            case 'KeyA':
-                this.moveLeft = true;
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                this.moveBackward = true;
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                this.moveRight = true;
-                break;
-            case 'KeyE':
-                if (this.isDriving) {
-                    this.exitCar();
-                } else {
-                    this.tryEnterCar();
-                }
-                break;
-            case 'Space':
-                if (this.canJump === true) this.velocity.y += 20; // Jump force
-                this.canJump = false;
-                break;
-        }
+  // [AAA-06] Raw keyboard handlers removed. Player drains one-shot logical
+  // events (enterExit / jump) from the InputManager instead of reading DOM.
+  _handleInputEvents() {
+    for (const ev of this.input.drain()) {
+      if (ev === 'enterExit') {
+        if (this.isDriving) this.exitCar();
+        else this.tryEnterCar();
+      } else if (ev === 'jump') {
+        if (this.canJump === true) this.velocity.y += 20; // Jump
+        this.canJump = false;
+      }
     }
-
-    onKeyUp(event) {
-        switch (event.code) {
-            case 'ArrowUp':
-            case 'KeyW':
-                this.moveForward = false;
-                break;
-            case 'ArrowLeft':
-            case 'KeyA':
-                this.moveLeft = false;
-                break;
-            case 'ArrowDown':
-            case 'KeyS':
-                this.moveBackward = false;
-                break;
-            case 'ArrowRight':
-            case 'KeyD':
-                this.moveRight = false;
-                break;
-        }
-    }
+  }
 
     update(delta) {
+        this._handleInputEvents();
         if (this.controls.isLocked === true) {
             if (this.isDriving && this.currentCar) {
                 this.updateCarPhysics(delta);
@@ -182,12 +106,12 @@ export class Player {
             this.velocity.z -= this.velocity.z * 10.0 * delta;
             this.velocity.y -= 9.8 * 5.0 * delta; // Gravity - tweaked for feel
 
-            this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
-            this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
+            this.direction.z = Number(this.input.actions.moveForward) - Number(this.input.actions.moveBackward);
+            this.direction.x = Number(this.input.actions.moveRight) - Number(this.input.actions.moveLeft);
             this.direction.normalize();
 
-            if (this.moveForward || this.moveBackward) this.velocity.z -= this.direction.z * 150.0 * delta; // Move speed
-            if (this.moveLeft || this.moveRight) this.velocity.x -= this.direction.x * 150.0 * delta;
+            if (this.input.actions.moveForward || this.input.actions.moveBackward) this.velocity.z -= this.direction.z * 150.0 * delta; // Move speed
+            if (this.input.actions.moveLeft || this.input.actions.moveRight) this.velocity.x -= this.direction.x * 150.0 * delta;
 
             // Apply movement step-by-step to handle collision
             const intendedX = -this.velocity.x * delta;
@@ -407,9 +331,9 @@ export class Player {
 
         // Acceleration (Only if control is regained AND engine works)
         if (Math.abs(this.spinVelocity) < 5 && health > 0) {
-            if (this.moveForward) {
+            if (this.input.actions.moveForward) {
                 this.carVelocity += acceleration * delta;
-            } else if (this.moveBackward) {
+            } else if (this.input.actions.moveBackward) {
                 this.carVelocity -= acceleration * delta;
             } else {
                 // Drag
@@ -425,10 +349,10 @@ export class Player {
 
         // Steering
         if (Math.abs(this.carVelocity) > 0.1 && Math.abs(this.spinVelocity) < 5) {
-            if (this.moveLeft) {
+            if (this.input.actions.moveLeft) {
                 this.currentCar.mesh.rotation.y += turnSpeed * delta * Math.sign(this.carVelocity); // Reverse steering when reversing
             }
-            if (this.moveRight) {
+            if (this.input.actions.moveRight) {
                 this.currentCar.mesh.rotation.y -= turnSpeed * delta * Math.sign(this.carVelocity);
             }
         }

@@ -19,6 +19,7 @@ import { FrameLoop } from './loop.js'; // [AAA-02] frame loop hygiene
 import { FixedTimestep } from './core/time.js'; // [AAA-04] fixed-timestep core
 import { App, APP_STATES } from './core/app.js'; // [AAA-05] App state machine
 import { setSeed, DEFAULT_SEED } from './core/rng.js'; // [AAA-03] seeded deterministic RNG
+import { InputManager } from './input/index.js'; // [AAA-06] unified logical input
 
 let player;
 let cubes = [];
@@ -100,7 +101,11 @@ async function init() {
         pedestrianSystem = new PedestrianSystem(scene, worldData.citySize, worldData.blockSize, worldData.roadWidth);
 
         // Create Player
-        player = new Player(camera, document.body, [], null, null, effectSystem);
+        // [AAA-06] Unified input manager: keyboard/mouse/touch/gamepad -> logical actions.
+        // Pause/lock one-shots are wired to App/Player below; held move actions are
+        // consumed by Player.update(). Player owns no raw DOM input bindings anymore.
+        const inputManager = new InputManager({ dom: document.body });
+        player = new Player(camera, document.body, [], null, null, effectSystem, null, inputManager);
         player.emergencySystem = emergencySystem; // Hook crashes -> dispatch response
 
         // Chunk Manager (Infinite World)
@@ -205,9 +210,9 @@ async function init() {
         const app = new App({ clock: simClock });
         window.__worldloop.app = app;
         app.transition(APP_STATES.LOADING, 'init');
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'p' || e.key === 'P') app.togglePause();
-        });
+        // [AAA-06] Pause is now the logical 'pause' action (KeyP) fired by InputManager -> App.togglePause.
+        inputManager.onPause = () => app.togglePause();
+        inputManager.onLock = () => player.controls.lock();
         window.__worldloop.simClock = simClock;
 
         // [AAA-05] World + systems are wired: enter the playing state, which
@@ -229,7 +234,8 @@ async function init() {
                             }
                         }
 
-                        if (player) player.update(fixedDt);
+                        inputManager.update(fixedDt);
+        if (player) player.update(fixedDt);
                         if (emergencySystem) emergencySystem.update(fixedDt);
                         if (trafficSystem) trafficSystem.update(fixedDt);
                         if (trafficLightSystem) trafficLightSystem.update(fixedDt);

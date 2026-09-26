@@ -286,7 +286,30 @@ check('driving modifiers deterministic for a given weather',
   player.getDrivingModifiers().grip === player.getDrivingModifiers().grip, 'grip=' + player.getDrivingModifiers().grip);
 weather.currentWeather = 'sunny'; // reset for a clean deterministic report
 player.weatherSystem = weather;
-player.update(0.1);
+
+    // ---- [AAA-06] unified logical input (src/input/) ----
+    const im = new InputManager({ dom }); // stub dom -> adapters no-op in Node
+    check('AAA-06: InputManager builds over stub dom', im.adapters.length === 4, 'adapters=' + im.adapters.length);
+    check('AAA-06: keyboard adapter binds over stub dom without crashing', typeof im.adapters[0].bound === 'boolean' && !!im.adapters[0].map, 'bound=' + im.adapters[0].bound + ' map=' + !!im.adapters[0].map);
+    check('AAA-06: ActionMap maps KeyW -> moveForward', new ActionMap().actionForCode('KeyW') === 'moveForward', 'action=' + new ActionMap().actionForCode('KeyW'));
+    const am = new ActionMap();
+    const kb = new KeyboardAdapter({ map: am, onAction: (a) => { if (a === 'enterExit') kbFired = true; } });
+    let kbFired = false;
+    check('AAA-06: ActionMap remap rebinds a code', (am.remap('moveForward', ['KeyW']).actionForCode('KeyW') === 'moveForward'), 'ok');
+    check('AAA-06: ActionMap snapshot lists actions', am.snapshot().actions.includes('moveForward'), 'actions=' + am.snapshot().actions.join(','));
+    // InputManager held-state + one-shot edge-trigger
+    im._handle('moveForward', true, null);
+    check('AAA-06: held moveForward action set', im.actions.moveForward === true, 'fwd=' + im.actions.moveForward);
+    im._handle('enterExit', true, null);
+    im._handle('enterExit', true, null); // second press same frame -> edge-triggered once
+    check('AAA-06: one-shot enterExit edge-triggered once', im.events.filter(e => e === 'enterExit').length === 1, 'events=' + im.events.join(','));
+    const drained = im.drain();
+    check('AAA-06: drain clears one-shot queue', im.events.length === 0 && drained.includes('enterExit'), 'drained=' + drained.join(','));
+    im._handle('enterExit', false, null);
+    im._handle('enterExit', true, null);
+    check('AAA-06: re-press after release fires again', im.drain().includes('enterExit'), 'ok');
+    check('AAA-06: InputManager snapshot includes map+actions', !!im.snapshot().map && !!im.snapshot().actions, 'ok');
+    check('AAA-06: player consumes InputManager (no raw DOM key handlers)', player.input instanceof InputManager, 'input=' + (player.input && player.input.constructor && player.input.constructor.name));
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------
@@ -564,6 +587,7 @@ check('minimap 2d-draw disabled on Node but logic deterministic',
 // contract so a broken bundle or a resurrected CDN dependency fails the gate.
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { ActionMap, DEFAULT_BINDINGS, InputManager, KeyboardAdapter, ACTIONS } from './src/input/index.js'; // [AAA-06] logical input
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 check('ADR 0021: three is a pinned (exact) devDependency',
   pkg.devDependencies && pkg.devDependencies.three === '0.160.0',
