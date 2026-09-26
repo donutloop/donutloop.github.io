@@ -215,7 +215,7 @@ Each item ships green: `check_world.mjs` passes, browser render clean, one commi
 ## Phase 10 — world scale & spatial
 
 - **✅ DONE (AAA-09)** Spatial broadphase (uniform grid) replacing per-frame `getColliders()` concat in `chunk_manager.js`. `SpatialGrid` buckets static chunk colliders once on stream (insert on load, remove on unload); the per-frame hot path uses `getCollidersNear(x,z,r)` — a local cell subset instead of the full concat. Dynamic colliders (parking/traffic) are appended distance-culled. *(ADR-0029)* M
-- **AAA-10** Chunk LOD/pooling + streaming budget; remove the double `update()` in `main.js`. L
+- **✅ DONE (AAA-10)** Chunk LOD/pooling + streaming budget; remove the double `update()` in `main.js`. `ChunkManager` now exposes a per-frame `streamBudget` + `pendingLoads` queue: missing active chunks are enqueued and drained at most `streamBudget` per `update()`, and LOD rebuilds count against the same budget. Unloaded chunkData is stashed in `chunkPool` (keyed by chunk id) and reused on re-stream (no geometry rebuild). The redundant init-time `chunkManager.update()` in `main.js` is removed — the first per-frame sim update streams the initial world. *(ADR-0030)* L
 - **AAA-11** Renderer resilience: capability tiers, pixel-ratio cap, context-loss recovery, shadow budget. *(ADR 0023)* M
 
 ## Phase 11 — asset & audio pipeline

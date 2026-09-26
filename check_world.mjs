@@ -466,6 +466,49 @@ player.weatherSystem = weather;
         Array.isArray(local), 'local=' + local.length);
 }
 
+// ---- [AAA-10] Streaming budget + queue + chunk pooling (no double update) ----
+{
+    const scene = { add() {}, remove() {} };
+    const worldData = { blockSize: 20, roadWidth: 14 };
+    const sys = { loadChunk() {}, unloadChunk() {}, getColliders() { return []; } };
+    const player = { position: { x: 0, z: 0 }, camera: { position: { x: 0, z: 0 } } };
+
+    // Manager exposes the AAA-10 streaming machinery.
+    const mgr = new ChunkManager(scene, player, worldData, sys, sys, sys, sys, sys);
+    check('AAA-10: ChunkManager exposes a streaming budget + queue + pool',
+        mgr.streamBudget > 0 && Array.isArray(mgr.pendingLoads) && mgr.chunkPool instanceof Map,
+        'budget=' + mgr.streamBudget + ' queue=' + mgr.pendingLoads.length);
+
+    // Chunk pooling: load -> unload pools the chunkData -> re-load reuses it.
+    const cx = 20, cz = 0; // dist=20 -> wasteland (no population systems needed)
+    mgr.loadChunk(cx, cz);
+    const id = `${cx},${cz}`;
+    const loaded = mgr.chunks.get(id);
+    check('AAA-10: loadChunk streams a chunk into the active set',
+        !!loaded, 'id=' + id);
+    mgr.unloadChunk(id);
+    check('AAA-10: unloadChunk pools the chunkData for reuse',
+        mgr.chunkPool.has(id), 'poolSize=' + mgr.chunkPool.size);
+    mgr.loadChunk(cx, cz);
+    const reloaded = mgr.chunks.get(id);
+    check('AAA-10: re-load reuses the pooled chunkData (no rebuild)',
+        reloaded === loaded, 'reused=' + (reloaded === loaded));
+
+    // Streaming budget: update() enqueues missing chunks and drains at most
+    // streamBudget streams per call (budget of 1 -> queue stays non-empty).
+    const mgr2 = new ChunkManager(scene, player, worldData, sys, sys, sys, sys, sys);
+    mgr2.streamBudget = 1;
+    mgr2.update();
+    check('AAA-10: update() drains at most streamBudget streams per call',
+        mgr2.pendingLoads.length >= 1, 'pending=' + mgr2.pendingLoads.length);
+
+    // Double update removed: main.js must contain exactly one chunkManager.update().
+    const mainSrc = fs.readFileSync('src/main.js', 'utf8');
+    const updates = (mainSrc.match(/chunkManager\.update\(\)/g) || []).length;
+    check('AAA-10: main.js has exactly one chunkManager.update() (no double update)',
+        updates === 1, 'updates=' + updates);
+}
+
 check('player.update(0.1) runs', true, 'ok');
 
 // ---- 11. Deformation physics ----------------------------------------------------

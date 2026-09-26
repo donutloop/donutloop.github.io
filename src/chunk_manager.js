@@ -90,6 +90,11 @@ export class ChunkManager {
         // loadChunk and removed on unloadChunk — never rebuilt per frame.
         this.grid = new SpatialGrid(this.chunkSize);
 
+        // [AAA-10] Streaming budget + queue + chunk pooling.
+        this.streamBudget = 3;   // max stream ops (loads + LOD rebuilds) per update
+        this.pendingLoads = [];  // queue of {cx,cz,id} to stream on budget
+        this.chunkPool = new Map(); // id -> chunkData reused on re-stream (no rebuild)
+
         // Seed randomness
         this.noise = SimplexNoise;
     }
@@ -111,11 +116,19 @@ export class ChunkManager {
                 const id = `${cx},${cz}`;
                 activeIds.add(id);
 
-                if (!this.chunks.has(id)) {
-                    this.loadChunk(cx, cz);
-                    return; // Throttle: Load only 1 chunk per frame
+                if (!this.chunks.has(id) && !this.pendingLoads.some(p => p.id === id)) {
+                    // [AAA-10] Streaming budget: enqueue, don't stream yet.
+                    this.pendingLoads.push({ cx, cz, id });
                 }
             }
+        }
+
+        // [AAA-10] Drain the streaming queue up to the per-frame budget.
+        let streams = 0;
+        while (this.pendingLoads.length && streams < this.streamBudget) {
+            const job = this.pendingLoads.shift();
+            this.loadChunk(job.cx, job.cz);
+            streams++;
         }
 
         // LOD transitions — rebuild city chunks that crossed the detail boundary.
@@ -128,10 +141,10 @@ export class ChunkManager {
             const cx = parseInt(parts[0], 10);
             const cz = parseInt(parts[1], 10);
             const required = this.detailLevel(cx, cz, currentChunkX, currentChunkZ);
-            if (chunk.lodLevel !== required) {
+            if (chunk.lodLevel !== required && streams < this.streamBudget) {
                 this.unloadChunk(id);
                 this.loadChunk(cx, cz);
-                return; // Throttle: only 1 LOD rebuild per frame
+                streams++; // [AAA-10] LOD rebuild counts against the streaming budget
             }
         }
 
@@ -169,9 +182,20 @@ export class ChunkManager {
         const xPos = cx * this.chunkSize;
         const zPos = cz * this.chunkSize;
 
+        const id = `${cx},${cz}`;
+        const pooled = this.chunkPool.get(id);
         let chunkData;
 
-        if (isCity) {
+        if (pooled) {
+            // [AAA-10] Chunk pooling — reuse streamed geometry instead of rebuilding.
+            this.chunkPool.delete(id);
+            chunkData = pooled;
+            if (isCity && chunkData.lodLevel === 0) {
+                this.trafficSystem.loadChunk(cx, cz, chunkData);
+                this.parkingSystem.loadChunk(cx, cz, chunkData);
+                this.constructionSystem.loadChunk(cx, cz, chunkData);
+            }
+        } else if (isCity) {
             // LOD is player-relative: the detailed area follows the car, only the
             // far fringe of the visible field drops to grey silhouettes.
             let lodLevel = 0;
@@ -251,6 +275,10 @@ export class ChunkManager {
             this.constructionSystem.unloadChunk(cx, cz);
         }
         this.chunks.delete(id);
+
+        // [AAA-10] Pool the chunkData (mesh + colliders still attached) so a
+        // re-stream of this exact chunk id reuses geometry instead of rebuilding.
+        this.chunkPool.set(id, chunk);
     }
 
     // Detail level for a city chunk, measured as Euclidean distance from the

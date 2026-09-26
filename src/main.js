@@ -136,7 +136,8 @@ async function init() {
             trafficLightSystem,
             constructionSystem
         );
-        chunkManager.update(); // Initial load
+        // [AAA-10] No init-time update — the first per-frame sim update streams
+        // the initial chunks on budget (removes the redundant double update).
 
         // [AAA-07] Apply the quality tier's streaming-radius scale so low/medium
         // tiers stream fewer chunks (and render faster) than high/ultra.
