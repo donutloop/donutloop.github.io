@@ -13,6 +13,7 @@ import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
 import { ChunkManager } from './chunk_manager.js';
 import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget telemetry
 import { RoadGraph } from './road_graph.js'; // [NEW] implicit road-network graph
+import { Minimap } from './minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 
 let player;
 let prevTime = performance.now();
@@ -31,6 +32,7 @@ let emergencySystem; // [NEW] Gap D — emergency response
 let chunkManager;
 let telemetry; // [NEW]
 let roadGraph; // [NEW] road-network graph for realistic car routing
+let minimap; // [NEW] Round 9 — minimap / district-label HUD
 
 function initScore() {
     scoreElement = document.createElement('div');
@@ -117,6 +119,12 @@ async function init() {
         roadGraph = new RoadGraph(worldData.blockSize, 16);
         window.roadGraph = roadGraph; // Machine-readable on the browser path too
 
+        // [NEW] Round 9 — minimap / district-label HUD. Reads the live chunk
+        // manager grid + player world position; district names are deterministic
+        // via SimplexNoise over chunk coords (same pos -> same district).
+        minimap = new Minimap(chunkManager);
+        window.minimap = minimap; // Machine-readable on the browser path too
+
         // Dependency Injection
         trafficSystem.setDependencies(player, parkingSystem, trafficLightSystem, effectSystem, pedestrianSystem, roadGraph, emergencySystem);
         parkingSystem.setDependencies(effectSystem);
@@ -189,6 +197,12 @@ async function init() {
                     weatherSystem.update(delta, playerPos);
                 } if (pedestrianSystem) pedestrianSystem.update(delta);
                 if (airplaneSystem) airplaneSystem.update(delta);
+
+                // [NEW] Round 9 — refresh minimap HUD from the live player position
+                if (minimap) {
+                    const playerPos = player && player.mesh ? player.mesh.position : new THREE.Vector3();
+                    minimap.update(playerPos);
+                }
 
                 // Update Effects
                 if (effectSystem) effectSystem.update(delta);

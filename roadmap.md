@@ -96,8 +96,12 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - Driving (enter/exit car, pointer-lock) ✅ DONE
 - Crash deformation ✅ DONE
 - Taxi, giga tower, trees ✅ DONE
-- **⏳ PLANNED** Minimap / district label HUD — render a small canvas map of
+- **✅ DONE (Round 9)** Minimap / district label HUD — small canvas map of
   streamed chunks + current district name, so the player can navigate.
+  `src/minimap.js` `Minimap`: deterministic district labels via SimplexNoise
+  over chunk coords (same world pos -> same district), draws a 160x160 canvas
+  of the biome grid around the player, machine-readable in `check_world.mjs`
+  (ADR 0016).
 - **⏳ PLANNED** Weather-reactive driving (snow/rain reduce friction; expose as
   a `weather` field in `check_world.mjs` output).
 - **✅ DONE (Round 7 / Gap D)** Dynamic city events — emergency response &

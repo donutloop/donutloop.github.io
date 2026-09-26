@@ -27,6 +27,7 @@ import { FrameBudgetTelemetry } from './src/telemetry.js';
 import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
 import { EmergencySystem } from './src/emergency.js';
 import { PostProcessingPipeline } from './src/effects.js'; // [NEW] post-processing pipeline // [NEW] Gap D — emergency response
+import { Minimap, DISTRICT_PALETTE, BIOMES } from './src/minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
@@ -272,6 +273,33 @@ check('postFx bloom strength scales with neon district density', dryEst.bloom.st
 check('postFx bloom threshold lowers when neon is present', neonEst.bloom.threshold < dryEst.bloom.threshold, 'dryT=' + dryEst.bloom.threshold.toFixed(2) + ' neonT=' + neonEst.bloom.threshold.toFixed(2));
 check('postFx droplet overlay scales with precipitation', rainEst.droplets.intensity > 0 && rainEst.droplets.intensity <= 1, 'rain=' + rainEst.droplets.intensity.toFixed(2));
 check('postFx targets are finite (safe for GL passes)', ['strength', 'threshold', 'radius'].every(k => Number.isFinite(rainEst.bloom[k])) && Number.isFinite(rainEst.droplets.intensity), 'finite');
+
+// ---- 15. Minimap / district-label HUD (Round 9) --------------------------------
+// Browser draws a real canvas; the Node path must stay deterministic without a
+// canvas 2d context: district names derive from SimplexNoise over chunk coords,
+// so the same world position always maps to the same district.
+const minimap = new Minimap(chunkManager);
+const mp = { x: 34 * 2 + 17, z: 34 * -1 + 17 }; // somewhere in the city grid
+const mmState = minimap.update(mp);
+check('minimap exposes playerChunk/district/activeChunks',
+  Array.isArray(mmState.activeChunks) && Array.isArray(mmState.playerChunk) && typeof mmState.district === 'string',
+  'district=' + mmState.district + ' playerChunk=' + JSON.stringify(mmState.playerChunk) + ' active=' + mmState.activeChunks.length);
+const dA = minimap.districtAt(2, 2);
+const dB = minimap.districtAt(2, 2);
+const dC = minimap.districtAt(3, -4);
+check('minimap district labels deterministic (same coords -> same name)',
+  dA === dB && ['Wasteland', 'Highway Corridor', ...DISTRICT_PALETTE.map(d => d.name)].includes(dA),
+  'd(' + dA + ') == d(' + dB + ') other=' + dC);
+check('minimap district palette is a valid district set',
+  DISTRICT_PALETTE.length >= 4 && DISTRICT_PALETTE.every(d => typeof d.name === 'string' && typeof d.color === 'string'),
+  DISTRICT_PALETTE.map(d => d.name).join(','));
+check('minimap biomeAt maps city/highway/wasteland',
+  minimap.biomeAt(0, 0) === BIOMES.city && minimap.biomeAt(10, 0) === BIOMES.highway && minimap.biomeAt(20, 20) === BIOMES.wasteland,
+  'city(0,0) highway(10,0) wasteland(20,20)');
+check('minimap 2d-draw disabled on Node but logic deterministic',
+  !minimap.ctx && typeof mmState.district === 'string',
+  'ctx=' + minimap.ctx + ' district=' + mmState.district);
+
 
 // ---- Emit machine-readable JSON ------------------------------------------------
 const report = {
