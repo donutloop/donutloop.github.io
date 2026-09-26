@@ -8,7 +8,7 @@ import { WeatherSystem } from './weather.js';
 import { PedestrianSystem } from './pedestrians.js';
 import { ParkingSystem } from './parking.js';
 import { AirplaneSystem } from './airplanes.js';
-import { EffectSystem } from './effects.js';
+import { EffectSystem, PostProcessingPipeline } from './effects.js';
 import { TrafficLightSystem } from './traffic_lights.js'; // [NEW]
 import { ChunkManager } from './chunk_manager.js';
 import { FrameBudgetTelemetry } from './telemetry.js'; // [NEW] frame-budget telemetry
@@ -25,6 +25,7 @@ let pedestrianSystem;
 let parkingSystem;
 let airplaneSystem;
 let effectSystem;
+let postFx; // [NEW] post-processing pipeline (bloom + rain droplets)
 let trafficLightSystem; // [NEW]
 let emergencySystem; // [NEW] Gap D — emergency response
 let chunkManager;
@@ -66,6 +67,14 @@ async function init() {
 
         // Effect System
         effectSystem = new EffectSystem(scene);
+
+        // Post-processing pipeline — bloom for neon districts + rain droplets.
+        // Browser: builds an EffectComposer and renders through it each frame.
+        // Node/verify: no renderer → enabled=false, but update() stays deterministic.
+        postFx = new PostProcessingPipeline({ renderer, scene, camera });
+        if (postFx.enabled) {
+            window.addEventListener('resize', () => postFx.resize());
+        }
 
         // Initialize Systems
         trafficLightSystem = new TrafficLightSystem(scene, worldData.roadWidth, worldData.blockSize);
@@ -184,7 +193,29 @@ async function init() {
                 // Update Effects
                 if (effectSystem) effectSystem.update(delta);
 
-                renderer.render(scene, camera);
+                // [NEW] post-processing: bloom for neon districts + rain droplets.
+                // Update targets each frame from weather + neon district density,
+                // then render through the composer (or plain renderer if disabled).
+                if (postFx) {
+                    let neonBoost = 0;
+                    if (scene) {
+                        scene.traverse(o => {
+                            if (o.isMesh && o.material && o.material.color) {
+                                const c = o.material.color.getHex();
+                                if (c === 0x00ffff || c === 0xff00ff) neonBoost++;
+                            }
+                        });
+                    }
+                    neonBoost = Math.min(1, neonBoost / 24);
+                    const weatherState = weatherSystem ? weatherSystem.currentWeatherState : null;
+                    postFx.update(weatherState, neonBoost);
+                }
+
+                if (postFx && postFx.enabled) {
+                    postFx.render();
+                } else {
+                    renderer.render(scene, camera);
+                }
 
                 // [NEW] record real frame budget each frame
                 telemetry.recordFrame(delta, renderer.info.render.calls, renderer.info.render.triangles);

@@ -47,5 +47,6 @@ function onWindowResize() {
 export function animate(updateCallback) {
     requestAnimationFrame(() => animate(updateCallback));
     if (updateCallback) updateCallback();
-    renderer.render(scene, camera);
+    // main.js owns the render call (and the post-processing composer),
+    // so the callback is responsible for rendering each frame.
 }

@@ -83,8 +83,13 @@ Modern Three.js city sims don't draw every building as its own mesh. The ADRs
 - Cloud visual improvements (instanced, 3 sizes, infinite scroll) ✅ DONE (ADR 0009)
 - Reflections ✅ DONE
 - Tone mapping / ACES ✅ DONE
-- **⏳ PLANNED** Post-processing (bloom for neon districts, rain droplets) —
-  add a `src/effects.js` pipeline stage and a `check_world.mjs` flag.
+- **✅ DONE (Round 8)** Post-processing (bloom for neon districts, rain droplets) —
+  added `PostProcessingPipeline` to `src/effects.js`: EffectComposer with
+  RenderPass → UnrealBloomPass (neon-district glow) → droplet ShaderPass
+  (rain/snow overlay) → OutputPass. Browser renders through the composer
+  (main.js); Node path keeps `update()` deterministic (`enabled=false`) so
+  `check_world.mjs` asserts bloom/droplet targets without a WebGL context.
+  Added a `postFx` flag + 6 checks to `check_world.mjs`. ADR 0015.
 
 ## Phase 4 — gameplay
 

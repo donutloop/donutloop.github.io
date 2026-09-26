@@ -25,7 +25,8 @@ import { deformMesh } from './src/deformation.js';
 import { SimplexNoise } from './src/noise.js';
 import { FrameBudgetTelemetry } from './src/telemetry.js';
 import { RoadGraph } from './src/road_graph.js'; // [NEW] road-network graph
-import { EmergencySystem } from './src/emergency.js'; // [NEW] Gap D — emergency response
+import { EmergencySystem } from './src/emergency.js';
+import { PostProcessingPipeline } from './src/effects.js'; // [NEW] post-processing pipeline // [NEW] Gap D — emergency response
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
@@ -258,6 +259,20 @@ const turns = roadGraph.turnsAt(roadGraph.key(3, 0), 'x');
 check('roadGraph offers perpendicular turns at city intersections',
   turns.length > 0, turns.length + ' turn targets');
 
+// ---- Post-processing pipeline (bloom for neon districts + rain droplets) -------
+// Node path: no WebGL renderer -> pipeline disabled, but update() must be
+// deterministic so an agent can assert targets without a GL context.
+const postFx = new PostProcessingPipeline({});
+const dryEst = postFx.update({ precipAlpha: 0 }, 0);
+const rainEst = postFx.update({ precipAlpha: 0.9 }, 1);
+const neonEst = postFx.update({ precipAlpha: 0.2 }, 1);
+check('postFx pipeline exists and exposes passes', !!postFx && Array.isArray(postFx.passes) && postFx.passes.length >= 4, 'passes=' + postFx.passes.join(','));
+check('postFx disabled on Node (no renderer) but deterministic', postFx.enabled === false, 'enabled=' + postFx.enabled);
+check('postFx bloom strength scales with neon district density', dryEst.bloom.strength === 0 && neonEst.bloom.strength > 0 && rainEst.bloom.strength >= neonEst.bloom.strength, 'dry=' + dryEst.bloom.strength + ' neon=' + neonEst.bloom.strength.toFixed(2));
+check('postFx bloom threshold lowers when neon is present', neonEst.bloom.threshold < dryEst.bloom.threshold, 'dryT=' + dryEst.bloom.threshold.toFixed(2) + ' neonT=' + neonEst.bloom.threshold.toFixed(2));
+check('postFx droplet overlay scales with precipitation', rainEst.droplets.intensity > 0 && rainEst.droplets.intensity <= 1, 'rain=' + rainEst.droplets.intensity.toFixed(2));
+check('postFx targets are finite (safe for GL passes)', ['strength', 'threshold', 'radius'].every(k => Number.isFinite(rainEst.bloom[k])) && Number.isFinite(rainEst.droplets.intensity), 'finite');
+
 // ---- Emit machine-readable JSON ------------------------------------------------
 const report = {
   tool: 'check_world',
@@ -270,7 +285,13 @@ const report = {
     parking: { exports: ['ParkingSystem'] },
     traffic_lights: { exports: ['TrafficLightSystem'] },
     airplanes: { exports: ['AirplaneSystem'] },
-    effects: { exports: ['EffectSystem'] },
+    effects: { exports: ['EffectSystem', 'PostProcessingPipeline'] },
+    postFx: {
+      enabled: postFx.enabled,
+      passes: postFx.passes,
+      bloom: rainEst.bloom,
+      droplets: rainEst.droplets
+    },
     chunk_manager: { exports: ['ChunkManager'] },
     player: { exports: ['Player'] },
     deformation: { exports: ['deformMesh'] },

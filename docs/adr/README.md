@@ -14,3 +14,4 @@
 *   [12. Render-Distance LOD](0012-render-distance-lod.md)
 *   [13. Frame-Budget Telemetry](0013-frame-budget-telemetry.md)
 *   [14. Emergency Response Events](0014-emergency-response-events.md)
+*   [15. Post-Processing Pipeline (Bloom + Rain Droplets)](0015-post-processing.md)
