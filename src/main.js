@@ -221,7 +221,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v6.4.2: Varied Cloud Sizes';
+        verDiv.innerHTML = 'v6.5.0: Softer Reflections';
         document.body.appendChild(verDiv);
 
         // [AAA-02] frame loop: exactly ONE update per frame, explicit clamped

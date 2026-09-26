@@ -59,7 +59,11 @@ const matConcreteLight = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, rough
 const matBrick = new THREE.MeshStandardMaterial({ color: 0x8d4e3c, roughness: 0.9 });
 const matGlassModern = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.7, metalness: 0.15, envMapIntensity: 0.45 });
 const matGlassOffice = new THREE.MeshStandardMaterial({ color: 0x334455, roughness: 0.6, metalness: 0.2 });
-const matMetal = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.4, metalness: 0.8 });
+// Metal was metalness 0.8 / roughness 0.4 — a near-mirror reflecting the
+// bright env map as white glare across every metal building/prop surface.
+// Drop metalness to 0.3, raise roughness to 0.7, and cap envMapIntensity so
+// metal reads as painted metal with a subtle sheen, not chrome.
+const matMetal = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.7, metalness: 0.3, envMapIntensity: 0.35 });
 const matDarkMetal = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7, metalness: 0.5 });
 const matNeonCyan = new THREE.MeshBasicMaterial({ color: 0x00ffff });
 const matNeonPink = new THREE.MeshBasicMaterial({ color: 0xff00ff });

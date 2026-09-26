@@ -1,6 +1,6 @@
 {
   "name": "worldloop",
-  "version": "6.4.2",
+  "version": "6.5.0",
   "type": "module",
   "scripts": {
     "build": "node build/build.mjs",
