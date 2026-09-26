@@ -22,7 +22,11 @@ export function initScene() {
 
     // Tone mapping for realistic lighting
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    // ACES at exposure 1.0 blows out the bright RoomEnvironment speculars —
+    // reflections read as white glare. Lower it to soften highlights globally;
+    // the PMREM env map below is generated under the same tone mapping, so this
+    // also dims the environment's contribution to every material.
+    renderer.toneMappingExposure = 0.72;
 
     document.getElementById('app').appendChild(renderer.domElement);
 
