@@ -32,6 +32,7 @@ import { ConstructionSystem } from './src/construction.js';
 import { FrameLoop } from './src/loop.js'; // [AAA-02] frame loop hygiene
 import { PostProcessingPipeline } from './src/effects.js'; // [NEW] post-processing pipeline // [NEW] Gap D — emergency response
 import { Minimap, DISTRICT_PALETTE, BIOMES } from './src/minimap.js'; // [NEW] Round 9 — minimap / district-label HUD
+import { Planet, BIOME, BIOME_TABLE, CITY_KINDS, planet, setPlanet } from './src/planet.js'; // [NEW] PLANET-01 — seeded planetary surface model
 import fs from 'node:fs';
 
 const VERSION = '6.4.2';
@@ -98,6 +99,173 @@ const trafficLights = new TrafficLightSystem(scene, world.roadWidth, world.block
     emergency.setEffects(effects);
 const construction = new ConstructionSystem(scene);
 const chunkManager = new ChunkManager(scene, null, world, traffic, parking, pedestrians, trafficLights, construction);
+
+// ---- 0. Planet — the seeded surface model underneath every chunk ----------
+const PLANET_CS = world.blockSize + world.roadWidth;
+const P = new Planet({ seed: getSeed(), chunkSize: PLANET_CS });
+const P_TWIN = new Planet({ seed: getSeed(), chunkSize: PLANET_CS });
+const P_OTHER = new Planet({ seed: (getSeed() ^ 0x5f5f5f) >>> 0 || 4242, chunkSize: PLANET_CS });
+
+check('planet exports Planet/BIOME/BIOME_TABLE/CITY_KINDS',
+  typeof Planet === 'function' && typeof BIOME === 'object' && typeof BIOME_TABLE === 'object' && typeof CITY_KINDS === 'object',
+  Object.keys(BIOME).length + ' biomes, ' + Object.keys(CITY_KINDS).length + ' city kinds');
+
+check('planet fields are finite over a wide sample', (() => {
+  for (let i = -12; i <= 12; i++) {
+    for (let j = -12; j <= 12; j++) {
+      const x = i * PLANET_CS, z = j * PLANET_CS;
+      const e = P.surfaceHeight(x, z), m = P.moisture(x, z), t = P.temperature(x, z);
+      if (!Number.isFinite(e) || !Number.isFinite(m) || !Number.isFinite(t)) return false;
+      if (m < 0 || m > 1 || t < 0 || t > 1) return false;
+    }
+  }
+  return true;
+})(), 'elevation/moisture/temperature bounded');
+
+const PLANET_STATS = P.stats(-30, -30, 30, 30);
+check('planet produces real biome variety (>8 classes)',
+  PLANET_STATS.distinctBiomes > 8,
+  PLANET_STATS.distinctBiomes + ' biomes: ' + Object.keys(PLANET_STATS.biomes).join(','));
+check('planet has ocean, inland lakes AND rivers', (() => {
+  let ocean = 0, lake = 0, river = 0;
+  for (let i = 0; i < 70; i++) {
+    for (let j = 0; j < 70; j++) {
+      const x = (i - 35) * PLANET_CS, z = (j - 35) * PLANET_CS;
+      if (!P.isWater(x, z)) continue;
+      if (P.isRiver(x, z)) river++;
+      else if (P.isLake(x, z)) lake++;
+      else ocean++;
+    }
+  }
+  return ocean > 20 && lake > 5 && river > 0;
+})(), 'ocean / lake / river cells present');
+
+check('planet water fraction is Earth-like (5–45%)',
+  PLANET_STATS.waterFraction > 0.05 && PLANET_STATS.waterFraction < 0.45,
+  'waterFraction=' + PLANET_STATS.waterFraction);
+
+check('planet classifies standing water as lake vs sea', (() => {
+  let lake = 0, sea = 0;
+  for (let i = 0; i < 70; i++) {
+    for (let j = 0; j < 70; j++) {
+      const x = (i - 35) * PLANET_CS, z = (j - 35) * PLANET_CS;
+      const b = P.biomeAt(x, z);
+      if (b === BIOME.LAKE) lake++;
+      else if (b === BIOME.OCEAN || b === BIOME.COAST) sea++;
+    }
+  }
+  return lake > 3 && sea > 20;
+})(), 'lake/sea split from the land-ring test');
+
+check('planet is deterministic (same seed -> same classification)', (() => {
+  for (let i = -8; i <= 8; i++) {
+    for (let j = -8; j <= 8; j++) {
+      if (P.dominantBiomeInChunk(i, j) !== P_TWIN.dominantBiomeInChunk(i, j)) return false;
+      const a = P.classifyChunk(i, j), b = P_TWIN.classifyChunk(i, j);
+      if (a.type !== b.type || a.biome !== b.biome || (a.city && a.city.id) !== (b.city && b.city.id)) return false;
+    }
+  }
+  return true;
+})(), '96 chunks identical across instances');
+
+check('planet seed actually changes the world', (() => {
+  for (let i = 0; i < 12; i++) {
+    for (let j = 0; j < 12; j++) {
+      if (P.dominantBiomeInChunk(i, j) !== P_OTHER.dominantBiomeInChunk(i, j)) return true;
+    }
+  }
+  return false;
+})(), 'seed ' + P.seed + ' vs ' + P_OTHER.seed);
+
+check('planet every biome has a render/ecology entry',
+  Object.values(BIOME).every(b => BIOME_TABLE[b] && Number.isInteger(BIOME_TABLE[b].ground) && Array.isArray(BIOME_TABLE[b].flora)),
+  Object.keys(BIOME_TABLE).length + ' table rows');
+
+check('planet unknown biome falls back to grassland',
+  Planet.biomeInfo('not-a-biome') === BIOME_TABLE[BIOME.GRASSLAND], 'fallback ok');
+
+const SPAWN_CITY = P.cityAtChunk(0, 0);
+check('planet puts a city at the origin chunk (first landfall)',
+  !!SPAWN_CITY && SPAWN_CITY.kind === 'metropolis' && SPAWN_CITY.isSpawn === true,
+  SPAWN_CITY ? SPAWN_CITY.name + ' / ' + SPAWN_CITY.label : 'none');
+
+const CITY_SET = P.citiesInChunkRange(-96, -96, 96, 96);
+check('planet scatters cities across the wilds (infinite settlements)',
+  CITY_SET.length >= 8,
+  CITY_SET.length + ' cities within ±9.2 km of origin');
+
+const CITY_KIND_SEEN = new Set(CITY_SET.map(c => c.kind));
+check('cities differ from each other (multiple kinds)',
+  CITY_KIND_SEEN.size >= 3,
+  [...CITY_KIND_SEEN].join(','));
+
+check('each city carries a full architecture profile', CITY_SET.length > 0 && CITY_SET.every(c => {
+  const prof = CITY_KINDS[c.kind];
+  return prof && c.population > 0 && typeof c.name === 'string' && c.name.length > 2 &&
+    c.density === prof.density && Array.isArray(c.height) && c.height.length === 2 &&
+    typeof c.styleMix === 'object' && c.r > 0 && Number.isInteger(c.cx) && Number.isInteger(c.cz);
+}), 'profiles resolve against CITY_KINDS');
+
+check('cities sit on dry land (sites were walked out of the water)', (() => {
+  const dry = CITY_SET.filter(c => !P.isWater(c.x, c.z));
+  return dry.length >= CITY_SET.length * 0.9;
+})(), `${CITY_SET.filter(c => !P.isWater(c.x, c.z)).length}/${CITY_SET.length} dry sites`);
+
+check('chunk classification matches the model (city / road / nature)', (() => {
+  const inCity = P.classifyChunk(SPAWN_CITY.cx, SPAWN_CITY.cz);
+  if (inCity.type !== 'city' || inCity.city.id !== SPAWN_CITY.id) return false;
+  // far from every city and every leg -> wilderness
+  let wild = false;
+  for (let i = 40; i < 46 && !wild; i++) {
+    for (let j = 40; j < 46 && !wild; j++) {
+      const c = P.classifyChunk(i, j);
+      if (c.type === 'nature') wild = true;
+    }
+  }
+  let road = false;
+  for (const leg of P.legsForCity(SPAWN_CITY)) {
+    const step = Math.sign(leg.to - leg.from);
+    const mid = Math.round((leg.from + leg.to) / 2);
+    const probe = leg.axis === 'x' ? P.classifyChunk(mid, leg.fixed) : P.classifyChunk(leg.fixed, mid);
+    if (probe.type === 'road') { road = true; break; }
+  }
+  return wild && road;
+})(), 'city at origin, wilderness and highway legs found');
+
+check('inter-city roads are chunk-aligned (integer grid rows)', (() => {
+  for (const c of CITY_SET.slice(0, 12)) {
+    for (const leg of P.legsForCity(c)) {
+      if (!Number.isInteger(leg.fixed) || !Number.isInteger(leg.from) || !Number.isInteger(leg.to)) return false;
+      if (leg.axis !== 'x' && leg.axis !== 'z') return false;
+    }
+  }
+  return true;
+})(), 'legs snap to chunk rows/columns');
+
+check('city cores are graded flat (groundHeight 0 under the streets)', (() => {
+  for (const [dx, dz] of [[0, 0], [20, -14], [-31, 27]]) {
+    if (Math.abs(P.groundHeight(SPAWN_CITY.x + dx, SPAWN_CITY.z + dz)) > 1e-6) return false;
+  }
+  return true;
+})(), 'flat pad under the city, relief kept in the wilds');
+
+check('planet names places deterministically (city + region)', (() => {
+  const a = P.cityAtChunk(0, 0).name, b = P_TWIN.cityAtChunk(0, 0).name;
+  const r = P.regionAt(1234.5, -987.25);
+  return a === b && a.length > 3 && typeof r === 'string' && r.length > 3;
+})(), SPAWN_CITY.name + ' · ' + P.regionAt(1234.5, -987.25));
+
+check('planet shared instance is seed-keyed', planet({ chunkSize: PLANET_CS }) instanceof Planet && planet() === planet(),
+  'planet() memoized, seed=' + planet().seed);
+
+check('planet setPlanet installs a live instance (seed change at runtime)', (() => {
+  const prev = planet();
+  const alt = new Planet({ seed: 4242, chunkSize: PLANET_CS });
+  setPlanet(alt);
+  const ok = planet() === alt && planet().seed === 4242;
+  setPlanet(prev);
+  return ok && planet() === prev;
+})(), 'runtime seed swap round-trips');
 
 // ---- 1. World surface -----------------------------------------------------
 const worldKeys = ['roadWidth', 'blockSize', 'citySize', 'directionalLight', 'ambientLight', 'materials'];
@@ -1015,6 +1183,17 @@ const report = {
       droplets: rainEst.droplets
     },
     chunk_manager: { exports: ['ChunkManager'] },
+    planet: {
+      exports: ['Planet', 'BIOME', 'BIOME_TABLE', 'CITY_KINDS', 'planet', 'setPlanet'],
+      seed: P.seed,
+      chunkSize: PLANET_CS,
+      biomes: PLANET_STATS.biomes,
+      distinctBiomes: PLANET_STATS.distinctBiomes,
+      waterFraction: PLANET_STATS.waterFraction,
+      citiesNearOrigin: CITY_SET.length,
+      cityKindsSeen: [...CITY_KIND_SEEN],
+      originCity: SPAWN_CITY ? { name: SPAWN_CITY.name, kind: SPAWN_CITY.kind, population: SPAWN_CITY.population, radiusChunks: SPAWN_CITY.radiusChunks } : null,
+    },
     player: { exports: ['Player'] },
     deformation: { exports: ['deformMesh'] },
     noise: { exports: ['SimplexNoise'] },

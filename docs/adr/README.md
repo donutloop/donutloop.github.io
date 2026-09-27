@@ -34,6 +34,11 @@ the one it replaces.
 | 0026 | Unified logical input (AAA-06) | Accepted |
 | 0027 | Persisted settings (AAA-07) | Accepted |
 | 0028 | Replay-safe save/load — `core/save.js` (AAA-08) | Accepted |
+| 0029 | Spatial broadphase — uniform-grid collider index (AAA-09) | Accepted |
+| 0030 | Streaming budget + queue + chunk pooling (AAA-10) | Accepted |
+| 0031 | Seeded planetary surface model (`src/planet.js`) | Accepted |
 
-Newest decisions (0021–0028) are the foundation for the AAA migration phases in
+Newest decisions (0021–0030) are the foundation for the AAA migration phases in
 `roadmap.md` Phase 8+; the full migration plan lives in `docs/aaa-migration-plan.md`.
+ADR 0031 opens **Phase 16 — Living Planet**: the seeded world model behind the
+biome/ocean/forest/city transformation.

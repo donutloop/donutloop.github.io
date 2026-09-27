@@ -13,6 +13,7 @@ feature). Status legend: ✅ DONE · 🟢 mostly done (small leftovers) · 🟠 
 | Entry / system wiring / HUD | `src/main.js` | ✅ done |
 | Scene + renderer setup | `src/scene.js` | ✅ done |
 | Procedural geometry + material cache | `src/world.js` | ✅ done |
+| Planetary surface model (biomes, water, cities) | `src/planet.js` | ✅ done (Phase 16, PLANET-01) |
 | Chunked infinite-city streaming | `src/chunk_manager.js` | ✅ done |
 | Traffic (cars obey lights, avoid obstacles) | `src/traffic.js` | ✅ done |
 | Traffic lights | `src/traffic_lights.js` | ✅ done |
@@ -301,3 +302,55 @@ and `npm run test:nightly` runs the seeded marathon with flake-tracking.
    and mutation gates all green and wired into CI (build → unit → property → snapshot →
    visual → perf → deploy) + nightly seeded marathon.
 3. ✅ Every item ships green: `check_world.mjs` passes, browser render clean, one commit each.
+
+---
+
+# Phase 16 — LIVING PLANET (No Man's Sky transformation)
+
+Goal: stop being "one city at the origin plus a grey wasteland" and become a
+single seeded **planet** you can drive forever — real biomes, oceans, lakes,
+rivers, forests, deserts and polar caps, with procedurally named settlements of
+different characters scattered across it and highways connecting them.
+
+Driver: `src/planet.js` is the only source of truth for "what is this place?".
+Every downstream system (chunk streaming, renderer, population, minimap, HUD)
+reads the same classification object.
+
+- **✅ DONE (PLANET-01)** `src/planet.js` — seeded planetary surface model.
+  Elevation (continents + hills + ridged ranges), moisture, temperature, river
+  carving; 16-biome Whittaker classification with a per-biome ecology/render
+  table (`BIOME_TABLE`); lakes that actually break the waterline, sea/lake split
+  by land-ring test, rivers carved in low country; jittered chunk-snapped city
+  lattice with 10 city kinds (`CITY_KINDS`), procedural names, populations, and
+  L-shaped inter-city road legs; `groundHeight()` grades city cores and road
+  corridors flat. Verified by 21 new `check_world.mjs` checks (biome variety,
+  ocean/lake/river presence, water fraction, cross-instance determinism, seed
+  sensitivity, city profiles, road alignment, flat city pads). *(ADR 0031)* L
+- **⏳ PLANET-02** Stream the planet: `ChunkManager` classifies chunks through
+  `planet.classifyChunk()` instead of `dist < 6`; `world.js` gains
+  `createNatureChunk()` (biome ground tint, instanced trees/rocks/bushes/reeds/
+  cacti per `BIOME_TABLE.flora`) and water surfaces for ocean/lake/river.
+  Wasteland is deleted. *(ADR 0031)* L
+- **⏳ PLANET-03** City personalities in geometry: per-kind height profile,
+  style mix, palette, landmarks (clocktower/silo/refinery/lighthouse/pyramid),
+  farms, docks — so a harbour town does not look like a neon district.
+- **⏳ PLANET-04** Relief + hydro: render real terrain height, waterline shader
+  pass, bridges where roads cross rivers, ground-height sampling for player,
+  cars and pedestrians.
+- **⏳ PLANET-05** Wildlife + sky: flocks, herds, fish; planet sky gradient with
+  sun/moon so a drive reads as *a world*, not a level.
+- **⏳ PLANET-06** Navigation: minimap city pins + region names, "nearest
+  settlement" HUD, and a seed field so a planet can be shared.
+
+### Planet gap notes (for the next cycle)
+
+* Lakes had to be built by **pulling the surface down** (`mix(e, -0.16, lake)`);
+  subtracting a basin term from a positive elevation measured 0 lake cells. Do
+  not "rebalance" that back.
+* Raw fbm needs the contrast multipliers — with them at 1 the planet is one
+  beige biome and the variety checks fail.
+* Cities are **chunk-snapped on purpose**. Keep city `cx/cz` integers; if a
+  future change makes roads diagonal, traffic/parking/pedestrians all need
+  lane-axis support first.
+* `Planet` caches per cell/chunk; call `reset()` (or a fresh instance) after
+  changing any tuning field, otherwise tuning looks like it had no effect.
