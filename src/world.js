@@ -95,16 +95,42 @@ const matLeafYellow = new THREE.MeshStandardMaterial({ color: 0xddcc22, roughnes
 const matLeafGrey = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1.0 }); // Fallback
 const matDirt = new THREE.MeshStandardMaterial({ color: 0x5b4033, roughness: 1.0 });
 const matTrunkGrey = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.9, name: 'trunkGrey' });
+// Cold biomes (tundra / boreal / alpine / peaks) dress foliage in snow instead of
+// inventing a second forest archetype — same trees, winterised palette.
+const matLeafSnow = new THREE.MeshStandardMaterial({ color: 0xe8eef2, roughness: 0.85, name: 'leafSnow' });
 const matTrunkBlack = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, name: 'trunkBlack' });
 
-// Tree Geometry Helpers (Reused to avoid allocations)
-const geomTrunk = new THREE.CylinderGeometry(0.2, 0.3, 1, 5);
+// Tree Geometry Helpers (Reused to avoid allocations).
+// All prototypes are stored NON-indexed on purpose: the icosahedron foliage has
+// no index buffer, so a trunk/cone that did have one would make
+// BufferGeometryUtils.mergeGeometries() reject the whole merged batch (mixed
+// index/no-index attributes) and silently drop that species from the chunk.
+const geomTrunk = new THREE.CylinderGeometry(0.2, 0.3, 1, 5).toNonIndexed();
 geomTrunk.translate(0, 0.5, 0);
 const geomSphere = new THREE.IcosahedronGeometry(1, 1);
-const geomCone = new THREE.ConeGeometry(1, 1, 5);
+const geomCone = new THREE.ConeGeometry(1, 1, 5).toNonIndexed();
 geomCone.translate(0, 0.5, 0);
 
-// --- BUILDERS ---
+// --- VEGETATION REGISTRY ---
+
+/**
+ * Foliage materials keyed by the accumulator name that addTreeToGeoms writes
+ * into. The wilderness builder uses the same keys, so a forest and a street
+ * tree line merge through one code path.
+ */
+export const VEGETATION_MATERIALS = {
+    trunkBrown: matTrunkBrown, trunkWhite: matTrunkWhite, trunkGrey: matTrunkGrey, trunkBlack: matTrunkBlack,
+    leafGreen: matLeafGreen, leafDark: matLeafDark, leafPink: matLeafPink,
+    leafOrange: matLeafOrange, leafYellow: matLeafYellow, leafSnow: matLeafSnow,
+    dirt: matDirt,
+};
+
+/** Merge every vegetation accumulator present in `geoms` into the group. */
+export function mergeVegetation(group, geoms, addClean) {
+    for (const key of Object.keys(VEGETATION_MATERIALS)) {
+        if (geoms[key] && geoms[key].length) addClean(geoms[key], VEGETATION_MATERIALS[key]);
+    }
+}
 
 // --- BUILDERS ---
 
@@ -128,67 +154,76 @@ function createBuildingMesh(x, z, width, height, depth, style, geoms) {
 
 
 
-function addTreeToGeoms(type, x, z, geoms) {
+/**
+ * addTreeToGeoms — the shared tree archetypes (oak / pine / birch / oak variant
+ * / poplar / willow / bushy). Geometries accumulate into the chunk's per-material
+ * lists so a whole forest merges into a handful of draw calls.
+ *
+ * `opts` lets the planetary wilderness plant trees on real ground:
+ *   rand   — deterministic [0,1) source (defaults to Math.random in the city)
+ *   y      — ground height to plant on (default 0 = city sidewalk)
+ *   scale  — uniform size multiplier, so a forest is not a clone army
+ *   leaf / leafDark — foliage material keys (snow biomes pass 'leafSnow')
+ */
+export function addTreeToGeoms(type, x, z, geoms, opts = {}) {
+    const draw = typeof opts.rand === 'function' ? opts.rand : Math.random;
+    const rand = typeof opts.rand === 'number' ? opts.rand : draw();
+    const gy = opts.y === undefined ? 0.05 : opts.y;
+    const s = opts.scale === undefined ? 1 : opts.scale;
+    const leafKey = opts.leaf || 'leafGreen';
+    const darkKey = opts.leafDark || 'leafDark';
+
     // 1. Dirt Patch
-    geoms.dirt.push(box(1.5, 0.1, 1.5, x, 0.1, z));
+    geoms.dirt.push(box(1.5 * s, 0.1, 1.5 * s, x, gy + 0.05, z));
 
     // 2. Trunk & Leaves
-    const rand = Math.random();
     let trunkH = 2.5 + rand;
-    // ... rest of tree logic is fine, just need to ensure geoms reference is correct ...
-    // NOTE: The previous addTreeToGeoms implementation seems fine as it already accepted 'geoms'
-    // Let's just make sure we adapt buildModernTower etc to accept absolute X/Z or offset them
 
-    // Actually, box() helper adds coords.
-    // The previous implementation used relative coords inside the builder and added to a group.
-    // Now we need GLOBAL coords (relative to chunk center 0,0) passed into box().
-
-    // Re-implementing helper to be safe:
     const addMesh = (geom, matName, posY, scale, rotY = 0) => {
         const g = geom.clone();
-        g.scale(scale.x, scale.y, scale.z);
+        g.scale(scale.x * s, scale.y * s, scale.z * s);
         g.rotateY(rotY);
-        g.translate(x, posY, z);
+        g.translate(x, posY * s + gy, z);
         geoms[matName].push(g);
     };
 
     if (type === 0) { // Oak (Basic)
         addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.3, trunkH, 0.3));
-        addMesh(geomSphere, 'leafGreen', trunkH, new THREE.Vector3(1.8, 1.8, 1.8));
+        addMesh(geomSphere, leafKey, trunkH, new THREE.Vector3(1.8, 1.8, 1.8));
     } else if (type === 1) { // Pine
         addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.2, 2, 0.2));
-        addMesh(geomCone, 'leafDark', 2, new THREE.Vector3(2, 1.5, 2));
-        addMesh(geomCone, 'leafDark', 3.2, new THREE.Vector3(1.5, 1.5, 1.5));
-        addMesh(geomCone, 'leafDark', 4.4, new THREE.Vector3(0.8, 1.5, 0.8));
+        addMesh(geomCone, darkKey, 2, new THREE.Vector3(2, 1.5, 2));
+        addMesh(geomCone, darkKey, 3.2, new THREE.Vector3(1.5, 1.5, 1.5));
+        addMesh(geomCone, darkKey, 4.4, new THREE.Vector3(0.8, 1.5, 0.8));
     } else if (type === 2) { // Birch (Green)
         addMesh(geomTrunk, 'trunkWhite', 0, new THREE.Vector3(0.2, 4, 0.2));
-        addMesh(geomSphere, 'leafGreen', 4, new THREE.Vector3(1.6, 2, 1.6));
+        addMesh(geomSphere, leafKey, 4, new THREE.Vector3(1.6, 2, 1.6));
     } else if (type === 3) { // Oak Variant (Was Sakura)
         addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.25, 3, 0.25));
-        addMesh(geomSphere, 'leafGreen', 3, new THREE.Vector3(2, 2, 2));
+        addMesh(geomSphere, leafKey, 3, new THREE.Vector3(2, 2, 2));
     } else if (type === 4) { // Poplar (Tall)
         addMesh(geomTrunk, 'trunkBlack', 0, new THREE.Vector3(0.25, 4.5, 0.25));
-        addMesh(geomCone, 'leafDark', 3.5, new THREE.Vector3(1.2, 5, 1.2));
+        addMesh(geomCone, darkKey, 3.5, new THREE.Vector3(1.2, 5, 1.2));
     } else if (type === 5) { // Willow
         addMesh(geomTrunk, 'trunkBrown', 0, new THREE.Vector3(0.3, 2.5, 0.3));
-        addMesh(geomSphere, 'leafGreen', 2.5, new THREE.Vector3(2.5, 1.5, 2.5));
+        addMesh(geomSphere, leafKey, 2.5, new THREE.Vector3(2.5, 1.5, 2.5));
         // Drooping tendrils
         const count = 8;
         for (let i = 0; i < count; i++) {
             const angle = (i / count) * Math.PI * 2;
             const tx = Math.sin(angle) * 1.5;
             const tz = Math.cos(angle) * 1.5;
-            addMesh(geomSphere, 'leafGreen', 2.0, new THREE.Vector3(0.1, 2.0, 0.1), 0);
+            addMesh(geomSphere, leafKey, 2.0, new THREE.Vector3(0.1, 2.0, 0.1), 0);
 
             const tGeom = geomSphere.clone();
-            tGeom.scale(0.1, 2.5, 0.1);
-            tGeom.translate(x + tx, 1.5, z + tz);
-            geoms.leafGreen.push(tGeom);
+            tGeom.scale(0.1 * s, 2.5 * s, 0.1 * s);
+            tGeom.translate(x + tx * s, 1.5 * s + gy, z + tz * s);
+            geoms[leafKey].push(tGeom);
         }
     } else {
         // Bushy (Was Autumn)
         addMesh(geomTrunk, 'trunkGrey', 0, new THREE.Vector3(0.3, 3, 0.3));
-        addMesh(geomSphere, 'leafDark', 3, new THREE.Vector3(1.7, 1.7, 1.7));
+        addMesh(geomSphere, darkKey, 3, new THREE.Vector3(1.7, 1.7, 1.7));
     }
 }
 
@@ -502,6 +537,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
     const addClean = (arr, mat) => {
         if (arr.length > 0) {
             const merged = BufferGeometryUtils.mergeGeometries(arr);
+            if (!merged) return;   // incompatible attribute set — skip, never render null
             const mesh = new THREE.Mesh(merged, mat);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
@@ -523,16 +559,7 @@ export function createCityChunk(xPos, zPos, size, roadWidth = 24, lodLevel = 0) 
     // matWindow is shared so weather.js can light all windows at once.
     addBuildingInsts(chunkGroup, chunkGeoms.windowLights, matWindow);
 
-    addClean(chunkGeoms.trunkBrown, matTrunkBrown);
-    addClean(chunkGeoms.trunkWhite, matTrunkWhite);
-    addClean(chunkGeoms.trunkGrey, matTrunkGrey);
-    addClean(chunkGeoms.trunkBlack, matTrunkBlack);
-    addClean(chunkGeoms.leafGreen, matLeafGreen);
-    addClean(chunkGeoms.leafDark, matLeafDark);
-    addClean(chunkGeoms.leafPink, matLeafPink);
-    addClean(chunkGeoms.leafOrange, matLeafOrange);
-    addClean(chunkGeoms.leafYellow, matLeafYellow);
-    addClean(chunkGeoms.dirt, matDirt);
+    mergeVegetation(chunkGroup, chunkGeoms, addClean);
 
     addClean(chunkGeoms.road, matRoad);
     addClean(chunkGeoms.sidewalk, matSidewalk);
@@ -592,16 +619,6 @@ export function createHighwayChunk(xPos, zPos, size, roadWidth, type = 'x') {
     return { mesh: chunkGroup, colliders: colliders };
 }
 
-export function createWastelandChunk(xPos, zPos, size) {
-    const chunkGroup = new THREE.Group();
-    const colliders = [];
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matGround);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(xPos, -0.5, zPos);
-    ground.receiveShadow = true;
-    chunkGroup.add(ground);
-    return { mesh: chunkGroup, colliders: colliders };
-}
 
 
 /**

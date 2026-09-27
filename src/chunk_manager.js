@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { SimplexNoise } from './noise.js';
-import { createCityChunk, createWastelandChunk, createHighwayChunk } from './world.js'; // We will assume these exist
+import { createCityChunk, createHighwayChunk } from './world.js';
+import { createNatureChunk } from './terrain.js';
+import { planet as sharedPlanet } from './planet.js';
 
 /**
  * SpatialGrid — a uniform-grid broadphase (AAA-09).
@@ -81,7 +83,7 @@ export class ChunkManager {
         this.constructionSystem = constructionSystem;
 
         this.chunks = new Map(); // "x,z" -> chunkData
-        this.chunkSize = worldData.blockSize + worldData.roadWidth; // Should be 20 + 14 = 34
+        this.chunkSize = worldData.blockSize + worldData.roadWidth; // 70 + 26 = 96
         // Stream 2 chunks out (25 chunks) instead of 3 (49): full-detail geometry
         // everywhere (see lodDistance below) is heavy, and the old 3-chunk radius
         // caused streaming hitches as the player drove. A 5x5-block detailed city
@@ -107,6 +109,17 @@ export class ChunkManager {
 
         // Seed randomness
         this.noise = SimplexNoise;
+
+        // [PLANET-02] The planet is the only authority on what a place *is*.
+        // ChunkManager used to hard-code `dist < 6 -> city`, `|cx|<=5 -> highway`,
+        // else wasteland; now every chunk asks the surface model, so cities,
+        // highways, forest, ocean and desert stream in from the same seed.
+        this.planet = sharedPlanet({ chunkSize: this.chunkSize });
+    }
+
+    /** Classification for a chunk (planet-backed, cached by the planet). */
+    classify(cx, cz) {
+        return this.planet.classifyChunk(cx, cz, { roadWidth: this.worldData.roadWidth });
     }
 
     update() {
@@ -169,109 +182,85 @@ export class ChunkManager {
 
 
     loadChunk(cx, cz) {
-        // Determine Biome
-        // Use noise scale 0.1 for broad biomes
-        const noiseVal = this.noise.noise2D(cx * 0.1, cz * 0.1);
-
-        // Center (0,0) is always city
-        // Center (0,0) is always city
-        const dist = Math.sqrt(cx * cx + cz * cz);
-        // Strict City Limit: Radius 6 (approx 200m).
-        const isCity = dist < 6;
-
-        // Highway Detection
-        // X-Highway (East/West): Aligned with Z-axis of city (-5 to 5)
-        const isHighwayX = !isCity && Math.abs(cz) <= 5;
-        // Z-Highway (North/South): Aligned with X-axis of city (-5 to 5)
-        const isHighwayZ = !isCity && Math.abs(cx) <= 5;
-
-        // Combined Highway Flag
-        const isHighway = isHighwayX || isHighwayZ;
-
-        // Offset position
+        const id = `${cx},${cz}`;
+        // One call answers everything: city / road / nature, biome, ecology,
+        // the governing settlement and the surface height.
+        const cls = this.classify(cx, cz);
         const xPos = cx * this.chunkSize;
         const zPos = cz * this.chunkSize;
 
-        const id = `${cx},${cz}`;
         const pooled = this.chunkPool.get(id);
         let chunkData;
 
-        if (pooled) {
+        if (pooled && pooled.type === cls.type) {
             // [AAA-10] Chunk pooling — reuse streamed geometry instead of rebuilding.
             this.chunkPool.delete(id);
             chunkData = pooled;
-            if (isCity && chunkData.lodLevel === 0) {
-                // Spawn full population (traffic + parking + pedestrians +
-                // lights + construction) — all were released in unloadChunk.
-                // Pass a biome STRING, NOT the chunkData object: traffic.loadChunk
-                // calls biome.startsWith('highway'), and an object throws
-                // `n.startsWith is not a function`.
-                if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
-                if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
-                if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
-                if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
-                this.constructionSystem.loadChunk(cx, cz, chunkData);
-            } else if (isHighway) {
-                // Reload traffic for pooled highways (cars released on unloadChunk).
-                let type = 'x';
-                if (isHighwayX && isHighwayZ) type = 'cross';
-                else if (isHighwayZ) type = 'z';
-                if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, `highway_${type}`);
-            }
-        } else if (isCity) {
+            this._populate(cx, cz, cls, chunkData);
+        } else if (cls.type === 'city') {
             // LOD is player-relative: the detailed area follows the car, only the
             // far fringe of the visible field drops to grey silhouettes.
             let lodLevel = 0;
             if (this.player) {
                 const p = this.player.camera.position;
-                const pcx = Math.floor(p.x / this.chunkSize);
-                const pcz = Math.floor(p.z / this.chunkSize);
-                lodLevel = this.detailLevel(cx, cz, pcx, pcz);
-            } else {
-                lodLevel = dist > this.lodDistance ? 1 : 0;
+                lodLevel = this.detailLevel(cx, cz, Math.floor(p.x / this.chunkSize), Math.floor(p.z / this.chunkSize));
             }
             chunkData = createCityChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth, lodLevel);
             chunkData.lodLevel = lodLevel;
+            chunkData.type = 'city';
             // Spawn Population (Full detail only — far LOD chunks stay silent for perf)
-            if (lodLevel === 0) {
-                if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
-                if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
-                if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
-                if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
-            this.constructionSystem.loadChunk(cx, cz, chunkData);
-            }
-
-        } else if (isHighway) {
-            // Determine type
-            let type = 'x';
-            if (isHighwayX && isHighwayZ) type = 'cross';
-            else if (isHighwayZ) type = 'z';
-            // else type 'x' (default)
-
+            if (lodLevel === 0) this._populate(cx, cz, cls, chunkData);
+        } else if (cls.type === 'road') {
+            const type = cls.roadAxis || 'x';
             chunkData = createHighwayChunk(xPos, zPos, this.chunkSize, this.worldData.roadWidth, type);
-
-            // Spawn Population (Traffic Only)
-            // Pass specific highway biome/type to traffic system
+            chunkData.type = 'road';
+            chunkData.biome = 'highway';
             if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, `highway_${type}`);
-
-            // No Parking/Pedestrians on highway
-
         } else {
-            chunkData = createWastelandChunk(xPos, zPos, this.chunkSize);
-            // Maybe spawn sparse traffic/elements in wasteland later?
+            const lodLevel = this.player
+                ? this.detailLevel(cx, cz,
+                    Math.floor(this.player.camera.position.x / this.chunkSize),
+                    Math.floor(this.player.camera.position.z / this.chunkSize))
+                : 0;
+            chunkData = createNatureChunk(xPos, zPos, this.chunkSize, this.planet, cls, {
+                lod: lodLevel, waterLevel: this.planet.seaLevel,
+            });
+            chunkData.lodLevel = lodLevel;
         }
 
         // Add meshes to scene
         if (chunkData.mesh) this.scene.add(chunkData.mesh);
 
-        this.chunks.set(`${cx},${cz}`, chunkData);
+        this.chunks.set(id, chunkData);
 
         // [AAA-09] Bucket static colliders into the broadphase grid ONCE on
         // stream — never per frame. Each Box3 is inserted by its center cell.
         if (chunkData.colliders) {
             for (const box of chunkData.colliders) this.grid.insert(box);
         }
+        return chunkData;
     }
+
+    /**
+     * Populate a freshly streamed (or re-streamed from the pool) chunk. Cities
+     * get cars, parking, pedestrians, lights and cranes; inter-city roads get
+     * through traffic only; the wilds are left to the wildlife.
+     */
+    _populate(cx, cz, cls, chunkData) {
+        if (cls.type === 'city') {
+            // Pass a biome STRING, NOT the chunkData object: traffic.loadChunk
+            // calls biome.startsWith('highway'), and an object throws
+            // `n.startsWith is not a function`.
+            if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, 'city');
+            if (this.parkingSystem) this.parkingSystem.loadChunk(cx, cz);
+            if (this.pedestrianSystem) this.pedestrianSystem.loadChunk(cx, cz);
+            if (this.trafficLightSystem) this.trafficLightSystem.loadChunk(cx, cz);
+            if (this.constructionSystem) this.constructionSystem.loadChunk(cx, cz, chunkData);
+        } else if (cls.type === 'road') {
+            if (this.trafficSystem) this.trafficSystem.loadChunk(cx, cz, `highway_${cls.roadAxis || 'x'}`);
+        }
+    }
+
 
     unloadChunk(id) {
         const chunk = this.chunks.get(id);

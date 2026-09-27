@@ -80,6 +80,17 @@ export class Player {
     // MouseAdapter click-to-lock and the keyboard 'lock' action (Enter).
     }
 
+  // [PLANET-02] Move the player to an absolute place on the planet — used by the
+  // browser surface (window.__worldloop.teleport) so an agent can drive a route,
+  // jump to a settlement it discovered, and screenshot the result. Velocity is
+  // cleared so a teleport never launches the player through geometry.
+  teleport(x, z, y = 6) {
+    this.camera.position.set(x, y, z);
+    if (this.velocity) this.velocity.set(0, 0, 0);
+    if (this.car && this.car.mesh) this.car.mesh.position.set(x, y, z);
+    return { x, y, z };
+  }
+
   // [AAA-06] Raw keyboard handlers removed. Player drains one-shot logical
   // events (enterExit / jump) from the InputManager instead of reading DOM.
   _handleInputEvents() {

@@ -125,29 +125,30 @@ export const BIOME = {
  * Per-biome rendering / ecology table. The renderer reads this instead of
  * hard-coding per-biome magic numbers, so adding a biome is a data edit.
  *   ground  — surface tint (sRGB hex)
- *   trees   — expected trees per 100 m² (density driver for instanced foliage)
- *   flora   — prop mix drawn by the nature chunk builder
- *   trees   species hints map to the tree builders in world.js
+ *   trees   — tree density driver, ~trees per chunk at 96 m (× TREE_SCALE)
+ *   props   — scatter density for ground flora (× PROP_SCALE in terrain.js)
+ *   flora   — prop mix drawn by the nature chunk builder (PROP_TYPES keys)
+ *   cold    — foliage is dressed in snow
  */
 export const BIOME_TABLE = {
-    [BIOME.OCEAN]:      { ground: 0x1b3a56, trees: 0.00, flora: [], water: true },
-    [BIOME.COAST]:      { ground: 0x2d5a72, trees: 0.00, flora: ['reed'], water: true },
-    [BIOME.LAKE]:       { ground: 0x2a5a6b, trees: 0.00, flora: ['reed'], water: true },
-    [BIOME.BEACH]:      { ground: 0xc2a878, trees: 0.004, flora: ['reed', 'rock', 'bush'] },
-    [BIOME.WETLAND]:    { ground: 0x3f5a3a, trees: 0.02, flora: ['reed', 'reed', 'bush', 'rock'] },
-    [BIOME.MEADOW]:     { ground: 0x6d9b46, trees: 0.01, flora: ['flower', 'flower', 'grass', 'bush'] },
-    [BIOME.GRASSLAND]:  { ground: 0x7d9a3f, trees: 0.02, flora: ['grass', 'flower', 'bush', 'rock'] },
-    [BIOME.FOREST]:     { ground: 0x40602c, trees: 0.10, flora: ['bush', 'rock', 'grass', 'mushroom'] },
-    [BIOME.RAINFOREST]: { ground: 0x2f5a24, trees: 0.16, flora: ['bush', 'fern', 'mushroom', 'rock'] },
-    [BIOME.SAVANNA]:    { ground: 0x9a8c45, trees: 0.03, flora: ['grass', 'rock', 'bush'] },
-    [BIOME.DESERT]:     { ground: 0xc9a86a, trees: 0.006, flora: ['cactus', 'rock', 'bone'] },
-    [BIOME.SCRUB]:      { ground: 0x8a7d52, trees: 0.02, flora: ['bush', 'rock', 'bone'] },
-    [BIOME.TUNDRA]:     { ground: 0x8c9488, trees: 0.01, flora: ['rock', 'grass', 'bush'] },
-    [BIOME.BOREAL]:     { ground: 0x3c5344, trees: 0.08, flora: ['bush', 'rock', 'mushroom'] },
-    [BIOME.ALPINE]:     { ground: 0x6e7378, trees: 0.01, flora: ['rock', 'rock', 'grass'] },
-    [BIOME.PEAK]:       { ground: 0xdfe6ea, trees: 0.00, flora: ['rock'] },
-    [BIOME.RIVER]:      { ground: 0x2f4f63, trees: 0.00, flora: ['reed'], water: true },
-    [BIOME.CITY]:       { ground: 0x3a3a3a, trees: 0.01, flora: [] },
+    [BIOME.OCEAN]:      { ground: 0x1b3a56, trees: 0.00, props: 0.05, flora: [], water: true },
+    [BIOME.COAST]:      { ground: 0x2d5a72, trees: 0.00, props: 0.30, flora: ['reed'], water: true },
+    [BIOME.LAKE]:       { ground: 0x2a5a6b, trees: 0.00, props: 0.35, flora: ['reed'], water: true },
+    [BIOME.BEACH]:      { ground: 0xc2a878, trees: 0.02, props: 0.25, flora: ['driftwood', 'rock', 'bush'] },
+    [BIOME.WETLAND]:    { ground: 0x3f5a3a, trees: 0.05, props: 0.80, flora: ['reed', 'reed', 'bush', 'grass'] },
+    [BIOME.MEADOW]:     { ground: 0x6d9b46, trees: 0.06, props: 1.00, flora: ['flower', 'flower', 'grass', 'bush'] },
+    [BIOME.GRASSLAND]:  { ground: 0x7d9a3f, trees: 0.10, props: 0.85, flora: ['grass', 'flower', 'bush', 'rock'] },
+    [BIOME.FOREST]:     { ground: 0x40602c, trees: 0.75, props: 0.90, flora: ['bush', 'rock', 'grass', 'mushroom'] },
+    [BIOME.RAINFOREST]: { ground: 0x2f5a24, trees: 1.10, props: 1.00, flora: ['fern', 'bush', 'mushroom', 'fern'] },
+    [BIOME.SAVANNA]:    { ground: 0x9a8c45, trees: 0.20, props: 0.60, flora: ['grass', 'rock', 'bush'] },
+    [BIOME.DESERT]:     { ground: 0xc9a86a, trees: 0.03, props: 0.25, flora: ['cactus', 'rock', 'bone'] },
+    [BIOME.SCRUB]:      { ground: 0x8a7d52, trees: 0.12, props: 0.40, flora: ['bush', 'rock', 'bone'] },
+    [BIOME.TUNDRA]:     { ground: 0x8c9488, trees: 0.05, props: 0.30, flora: ['rock', 'grass', 'bush'], cold: true },
+    [BIOME.BOREAL]:     { ground: 0x3c5344, trees: 0.60, props: 0.50, flora: ['bush', 'rock', 'mushroom'], cold: true },
+    [BIOME.ALPINE]:     { ground: 0x6e7378, trees: 0.04, props: 0.45, flora: ['rock', 'rock', 'grass'], cold: true },
+    [BIOME.PEAK]:       { ground: 0xdfe6ea, trees: 0.00, props: 0.20, flora: ['rock'], cold: true },
+    [BIOME.RIVER]:      { ground: 0x2f4f63, trees: 0.00, props: 0.40, flora: ['reed'], water: true },
+    [BIOME.CITY]:       { ground: 0x3a3a3a, trees: 0.05, props: 0.10, flora: [] },
 };
 
 /* ------------------------------------------------------------------ */
@@ -265,6 +266,7 @@ export class Planet {
         this._cityCache = new Map();    // "cellX,cellZ" -> city | null
         this._chunkCache = new Map();   // "cx,cz" -> classification
         this._pairCache = new Map();    // city id -> neighbour cities (road graph)
+        this._heightCache = new Map();  // quantised (x,z) -> ground height
     }
 
     /* ---------------- fields ---------------- */
@@ -411,6 +413,23 @@ export class Planet {
     /** Ecological palette for a biome (falls back to grassland for unknowns). */
     static biomeInfo(biome) {
         return BIOME_TABLE[biome] || BIOME_TABLE[BIOME.GRASSLAND];
+    }
+
+    /**
+     * Height lookup cache. Rendering samples the surface once per terrain grid
+     * vertex and once per scattered prop, thousands of times per streamed chunk
+     * — and the fields behind it are pure, so the lookup is worth memoising.
+     * Quantised to 10 cm so neighbouring samples collapse onto one entry.
+     */
+    groundHeightCached(x, z) {
+        const kx = Math.round(x * 10), kz = Math.round(z * 10);
+        const key = kx * 100003 + kz;
+        const hit = this._heightCache.get(key);
+        if (hit !== undefined) return hit;
+        const h = this.groundHeight(kx / 10, kz / 10);
+        if (this._heightCache.size > 60000) this._heightCache.clear();
+        this._heightCache.set(key, h);
+        return h;
     }
 
     biomeInfo(biome) { return Planet.biomeInfo(biome); }
@@ -908,6 +927,7 @@ export class Planet {
         this._cityCache.clear();
         this._chunkCache.clear();
         this._pairCache.clear();
+        this._heightCache.clear();
     }
 }
 

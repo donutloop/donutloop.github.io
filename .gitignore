@@ -1,6 +1,7 @@
 node_modules/
 *.log
 .DS_Store
+shots/
 
 # pi agent state
 auth.json

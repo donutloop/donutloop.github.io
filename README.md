@@ -1,4 +1,4 @@
-# Worldloop v6.4.2
+# Worldloop v6.7.0
 
 ![Cloud Showcase](assets/cloud_showcase.png)
 

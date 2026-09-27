@@ -326,11 +326,30 @@ reads the same classification object.
   corridors flat. Verified by 21 new `check_world.mjs` checks (biome variety,
   ocean/lake/river presence, water fraction, cross-instance determinism, seed
   sensitivity, city profiles, road alignment, flat city pads). *(ADR 0031)* L
-- **⏳ PLANET-02** Stream the planet: `ChunkManager` classifies chunks through
-  `planet.classifyChunk()` instead of `dist < 6`; `world.js` gains
-  `createNatureChunk()` (biome ground tint, instanced trees/rocks/bushes/reeds/
-  cacti per `BIOME_TABLE.flora`) and water surfaces for ocean/lake/river.
-  Wasteland is deleted. *(ADR 0031)* L
+- **✅ DONE (PLANET-02)** Stream the planet. `ChunkManager` classifies every chunk
+  through `planet.classifyChunk()` (the `dist < 6 → city`, `|cx|≤5 → highway`,
+  else-wasteland rules are gone, and `createWastelandChunk` is deleted with them);
+  `world.js` shares its tree archetypes (`addTreeToGeoms` now takes `rand`/`y`/
+  `scale`/foliage-key options) and a vegetation registry; the new `src/terrain.js`
+  builds the wilds: a 7×7 vertex-coloured height grid with boundaries shared with
+  the neighbour chunk, per-cell water quads at the waterline (sea/lake/river
+  tinted separately), biome-species trees with snow-dressed cold foliage, and
+  instanced rocks/bushes/tufts/flowers/reeds/cacti/mushrooms/ferns/bones/
+  driftwood; far-LOD wilderness keeps the ground grid and drops the ecology.
+  `RoadGraph` and `Minimap` now read the planet too (lazy node growth, real
+  settlement/region names, city pins, nearest-settlement line), and the browser
+  surface exposes `__worldloop.planet / placeAt / teleport / weather`.
+  Also fixes a latent renderer bug: indexed trunk/cone prototypes made
+  `mergeGeometries()` reject a whole foliage batch, silently deleting tree
+  species from every chunk (the prototypes are now non-indexed).
+  13 net-new checks (197/197 in Node, 201/201 with the headless-browser smoke,
+  zero console errors/exceptions) plus a real-pixel check of the live browser:
+  112 trees + 676 props streamed in a forest chunk, water meshes in wet chunks,
+  116 distinct colour buckets in a frame.
+  *(ADR 0032)* L
+- **⏳ PLANET-03** City personalities in geometry: per-kind height profile,
+  style mix, palette, landmarks (clocktower/silo/refinery/lighthouse/pyramid),
+  farms, docks — so a harbour town does not look like a neon district.
 - **⏳ PLANET-03** City personalities in geometry: per-kind height profile,
   style mix, palette, landmarks (clocktower/silo/refinery/lighthouse/pyramid),
   farms, docks — so a harbour town does not look like a neon district.
@@ -354,3 +373,10 @@ reads the same classification object.
   lane-axis support first.
 * `Planet` caches per cell/chunk; call `reset()` (or a fresh instance) after
   changing any tuning field, otherwise tuning looks like it had no effect.
+* Headless screenshots are worthless until the click-to-play overlay (z-index
+  1000, `rgba(0,0,0,0.8)`) is hidden — a naive capture is 80% black and looks
+  like a rendering bug. The dev screenshot driver hides it first.
+* Screenshot pixel checks need `--headless=new`; old headless composites WebGL
+  unreliably, and `Page.captureScreenshot` then lies about brightness.
+* `RoadGraph.classify` is injected (planet-backed) with the historic origin
+  rules kept as the fallback, otherwise the golden topology snapshot moves.

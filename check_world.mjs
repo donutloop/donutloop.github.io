@@ -12,7 +12,7 @@
  */
 import * as THREE from 'three';
 import { runHeadlessSmoke } from './tools/ci/headless_cdp.mjs';
-import { createWorld, createCityChunk, createWastelandChunk } from './src/world.js';
+import { createWorld, createCityChunk } from './src/world.js';
 import { TrafficSystem } from './src/traffic.js';
 import { WeatherSystem } from './src/weather.js';
 import { PedestrianSystem } from './src/pedestrians.js';
@@ -35,7 +35,7 @@ import { Minimap, DISTRICT_PALETTE, BIOMES } from './src/minimap.js'; // [NEW] R
 import { Planet, BIOME, BIOME_TABLE, CITY_KINDS, planet, setPlanet } from './src/planet.js'; // [NEW] PLANET-01 — seeded planetary surface model
 import fs from 'node:fs';
 
-const VERSION = '6.4.2';
+const VERSION = '6.7.0';
 
 // --- Machine-readable output guard ---
 // The systems under test log to console.log during the checks; that would
@@ -278,7 +278,6 @@ check('world.materials.window present (night-time window illumination)',
   'window' in world.materials && world.materials.window.transparent === true,
   'materials=' + Object.keys(world.materials).join(','));
 const cityChunk = createCityChunk(0, 0, world.blockSize);
-const wasteChunk = createWastelandChunk(0, 0, world.blockSize);
   const instMeshes = cityChunk.mesh.children.filter(c => c.isInstancedMesh);
   check('world.createCityChunk -> buildings use InstancedMesh', instMeshes.length > 0, instMeshes.length + ' instanced meshes');
   check('instanced building meshes share the 1x1x1 unit-box geometry', instMeshes.every(m => m.geometry.type === 'BoxGeometry' && m.geometry.parameters.width === 1 && m.geometry.parameters.height === 1 && m.geometry.parameters.depth === 1), 'shared unit-box');
@@ -324,7 +323,6 @@ check('window-illumination panels merged into an InstancedMesh (matWindow)',
     let n = 0; cityChunk.mesh.traverse(c => { if (c.isInstancedMesh && c.material === world.materials.window) n++; });
     return n;
   })());
-check('world.createWastelandChunk -> {mesh,colliders}', wasteChunk.mesh instanceof THREE.Group && Array.isArray(wasteChunk.colliders));
 
 // ---- 2. Traffic -----------------------------------------------------------
 const speedMap = { sport: 16, taxi: 13, sedan: 11, suv: 9, truck: 6, bus: 5 };
@@ -660,7 +658,7 @@ player.weatherSystem = weather;
         'budget=' + mgr.streamBudget + ' queue=' + mgr.pendingLoads.length);
 
     // Chunk pooling: load -> unload pools the chunkData -> re-load reuses it.
-    const cx = 20, cz = 0; // dist=20 -> wasteland (no population systems needed)
+    const cx = 20, cz = 0; // any chunk: every population system here is a noop
     mgr.loadChunk(cx, cz);
     const id = `${cx},${cz}`;
     const loaded = mgr.chunks.get(id);
@@ -723,17 +721,27 @@ player.weatherSystem = weather;
     check('AAA-10 regression: pooled city re-stream passes "city" (no startsWith throw)',
         !threw && trafficBiome === 'city', 'threw=' + threw + ' biome=' + trafficBiome);
 
-    // Highway chunk (6,0): dist 6 (not <6) & |cz| 0 <=5 -> highway_x.
-    mgr.loadChunk(6, 0);
-    check('AAA-10 regression: fresh highway chunk passes "highway_x"',
-        trafficBiome === 'highway_x', 'biome=' + trafficBiome);
+    // Inter-city road chunk: ask the planet for one instead of hard-coding an
+    // origin-relative coordinate (PLANET-02 replaced `|cz| <= 5 -> highway`).
+    let roadChunk = null;
+    for (let i = -20; i <= 20 && !roadChunk; i++) {
+        for (let j = -20; j <= 20 && !roadChunk; j++) {
+            const c = mgr.classify(i, j);
+            if (c.type === 'road') roadChunk = { cx: i, cz: j, axis: c.roadAxis };
+        }
+    }
+    const roadId = roadChunk ? `${roadChunk.cx},${roadChunk.cz}` : null;
+    const expectedHighwayBiome = roadChunk ? `highway_${roadChunk.axis}` : 'highway_x';
+    mgr.loadChunk(roadChunk.cx, roadChunk.cz);
+    check('AAA-10 regression: fresh highway chunk passes the road-axis biome',
+        trafficBiome === expectedHighwayBiome, 'biome=' + trafficBiome + ' chunk=' + roadId);
 
     // Unload -> pooled highway; reload must reload traffic and not throw.
-    mgr.unloadChunk('6,0');
+    mgr.unloadChunk(roadId);
     threw = false;
-    try { mgr.loadChunk(6, 0); } catch (e) { threw = true; }
+    try { mgr.loadChunk(roadChunk.cx, roadChunk.cz); } catch (e) { threw = true; }
     check('AAA-10 regression: pooled highway re-stream reloads traffic (no throw)',
-        !threw && trafficBiome === 'highway_x', 'threw=' + threw + ' biome=' + trafficBiome);
+        !threw && trafficBiome === expectedHighwayBiome, 'threw=' + threw + ' biome=' + trafficBiome);
 }
 
 // ---- [LOD] No visible building drops to grey LOD ----
@@ -1006,31 +1014,133 @@ check('postFx bloom threshold lowers when neon is present', neonEst.bloom.thresh
 check('postFx droplet overlay scales with precipitation', rainEst.droplets.intensity > 0 && rainEst.droplets.intensity <= 1, 'rain=' + rainEst.droplets.intensity.toFixed(2));
 check('postFx targets are finite (safe for GL passes)', ['strength', 'threshold', 'radius'].every(k => Number.isFinite(rainEst.bloom[k])) && Number.isFinite(rainEst.droplets.intensity), 'finite');
 
-// ---- 15. Minimap / district-label HUD (Round 9) --------------------------------
+// ---- 15. Minimap / planet HUD (Round 9, planet-aware since PLANET-02) ------------
 // Browser draws a real canvas; the Node path must stay deterministic without a
-// canvas 2d context: district names derive from SimplexNoise over chunk coords,
-// so the same world position always maps to the same district.
+// canvas 2d context. The map now reads the planet, so its labels are real
+// settlement/region names instead of the old city/highway/wasteland trio.
 const minimap = new Minimap(chunkManager);
-const mp = { x: 34 * 2 + 17, z: 34 * -1 + 17 }; // somewhere in the city grid
-const mmState = minimap.update(mp);
+const CS = chunkManager.chunkSize;
+const mmState = minimap.update({ x: CS * 2 + CS / 2, z: CS * -1 + CS / 2 });
 check('minimap exposes playerChunk/district/activeChunks',
   Array.isArray(mmState.activeChunks) && Array.isArray(mmState.playerChunk) && typeof mmState.district === 'string',
   'district=' + mmState.district + ' playerChunk=' + JSON.stringify(mmState.playerChunk) + ' active=' + mmState.activeChunks.length);
-const dA = minimap.districtAt(2, 2);
-const dB = minimap.districtAt(2, 2);
-const dC = minimap.districtAt(3, -4);
+const dA = minimap.districtAt(0, 0);
+const dB = minimap.districtAt(0, 0);
+const dC = minimap.districtAt(30, 30);
 check('minimap district labels deterministic (same coords -> same name)',
-  dA === dB && ['Wasteland', 'Highway Corridor', ...DISTRICT_PALETTE.map(d => d.name)].includes(dA),
-  'd(' + dA + ') == d(' + dB + ') other=' + dC);
+  dA === dB && dA.length > 3 && dC.length > 3 && dA !== dC,
+  'origin=' + dA + ' wild=' + dC);
+check('minimap names the settlement you are standing in',
+  dA.includes(SPAWN_CITY.name) && dA.includes(SPAWN_CITY.label),
+  dA);
+check('minimap names the wilds by region + biome',
+  / · [a-z]+$/.test(dC),
+  dC);
 check('minimap district palette is a valid district set',
   DISTRICT_PALETTE.length >= 4 && DISTRICT_PALETTE.every(d => typeof d.name === 'string' && typeof d.color === 'string'),
   DISTRICT_PALETTE.map(d => d.name).join(','));
-check('minimap biomeAt maps city/highway/wasteland',
-  minimap.biomeAt(0, 0) === BIOMES.city && minimap.biomeAt(10, 0) === BIOMES.highway && minimap.biomeAt(20, 20) === BIOMES.wasteland,
-  'city(0,0) highway(10,0) wasteland(20,20)');
+check('minimap biomeAt maps city/highway/wild from the planet',
+  minimap.biomeAt(SPAWN_CITY.cx, SPAWN_CITY.cz) === BIOMES.city && minimap.biomeAt(40, 40) === BIOMES.wild,
+  'city(0,0)=' + minimap.biomeAt(0, 0) + ' wild(40,40)=' + minimap.biomeAt(40, 40));
+check('minimap reports the nearest settlement for navigation', (() => {
+  const n = minimap.nearestSettlement(SPAWN_CITY.x + 500, SPAWN_CITY.z);
+  return !!n && n.name === SPAWN_CITY.name && n.dist > 400 && n.population > 0;
+})(), JSON.stringify(minimap.nearest));
+check('minimap finds settlements around the player',
+  Array.isArray(mmState.nearbyCities) && mmState.nearbyCities.length >= 1 &&
+    mmState.nearbyCities.every(c => typeof c.name === 'string' && !!CITY_KINDS[c.kind]),
+  mmState.nearbyCities.map(c => c.name).slice(0, 4).join(', '));
+check('minimap tints chunks from the planet biome table',
+  /^#[0-9a-f]{6}$/.test(minimap.colorAt(40, 40)) && minimap.colorAt(0, 0) !== minimap.colorAt(40, 40),
+  'city=' + minimap.colorAt(0, 0) + ' wild=' + minimap.colorAt(40, 40));
 check('minimap 2d-draw disabled on Node but logic deterministic',
   !minimap.ctx && typeof mmState.district === 'string',
   'ctx=' + minimap.ctx + ' district=' + mmState.district);
+
+// ---- PLANET-02: wilderness renderer + planet-driven streaming ---------------------
+import { createNatureChunk, PROP_TYPES, TERRAIN_MATERIALS, waterMaterials, groundMaterial } from './src/terrain.js';
+
+{
+  // A forest chunk: surface grid + water + foliage, all from the planet.
+  let forestChunk = null;
+  for (let i = 1; i < 40 && !forestChunk; i++) {
+    for (let j = 1; j < 40 && !forestChunk; j++) {
+      const c = P.classifyChunk(i, j);
+      if (c.type === 'nature' && (c.biome === 'forest' || c.biome === 'boreal' || c.biome === 'rainforest')) forestChunk = { i, j, c };
+    }
+  }
+  const built = forestChunk && createNatureChunk(forestChunk.i * CS, forestChunk.j * CS, CS, P, forestChunk.c, { lod: 0, waterLevel: P.seaLevel });
+  check('terrain.createNatureChunk -> {mesh,colliders,treeCount}', !!built && built.mesh instanceof THREE.Group && Array.isArray(built.colliders) && built.treeCount > 0,
+    built ? built.biome + ' trees=' + built.treeCount + ' props=' + built.propCount + ' colliders=' + built.colliders.length : 'no forest chunk found');
+  const instanced = built ? built.mesh.children.filter(m => m.isInstancedMesh) : [];
+  const mergedMeshes = built ? built.mesh.children.filter(m => m.isMesh) : [];
+  check('terrain wilds use instanced props + merged foliage (few draw calls)',
+    instanced.length > 0 && mergedMeshes.length > 0 && built.mesh.children.length < 22,
+    'children=' + (built ? built.mesh.children.length : 0) + ' instanced=' + instanced.length + ' merged=' + mergedMeshes.length);
+  check('terrain surface is a vertex-coloured height grid',
+    mergedMeshes.some(m => m.geometry.getAttribute('color') && m.geometry.getAttribute('position').count === 49),
+    '7x7 shared-boundary grid');
+
+  // Same chunk, twice, from scratch: the wilderness must not reshuffle.
+  const again = createNatureChunk(forestChunk.i * CS, forestChunk.j * CS, CS, new Planet({ seed: getSeed(), chunkSize: CS }), forestChunk.c, { lod: 0, waterLevel: P.seaLevel });
+  check('terrain is deterministic per chunk (same seed -> same forest)',
+    again.treeCount === built.treeCount && again.propCount === built.propCount && again.colliders.length === built.colliders.length,
+    'trees=' + again.treeCount + ' props=' + again.propCount);
+
+  // Ocean chunk gets a water surface; a desert chunk gets none.
+  let wet = null, dry = null;
+  for (let i = 1; i < 50 && !(wet && dry); i++) {
+    for (let j = 1; j < 50 && !(wet && dry); j++) {
+      const c = P.classifyChunk(i, j);
+      if (c.type !== 'nature') continue;
+      if (!wet && P.waterDepth(i * CS, j * CS) > 1) wet = { i, j, c };
+      if (!dry && !P.isWater(i * CS, j * CS) && (c.biome === 'desert' || c.biome === 'grassland' || c.biome === 'meadow')) dry = { i, j, c };
+    }
+  }
+  const wetBuilt = wet && createNatureChunk(wet.i * CS, wet.j * CS, CS, P, wet.c, { lod: 0, waterLevel: P.seaLevel });
+  const dryBuilt = dry && createNatureChunk(dry.i * CS, dry.j * CS, CS, P, dry.c, { lod: 0, waterLevel: P.seaLevel });
+  check('terrain renders water surfaces for ocean/lake chunks only',
+    !!wetBuilt && !!dryBuilt &&
+      wetBuilt.mesh.children.some(m => m.isMesh && m.name.startsWith('water:')) &&
+      !dryBuilt.mesh.children.some(m => m.isMesh && m.name.startsWith('water:')),
+    'wet=' + (wetBuilt ? wetBuilt.biome : '-') + ' dry=' + (dryBuilt ? dryBuilt.biome : '-'));
+  check('terrain LOD drops foliage but keeps the ground',
+    (() => {
+      const lod = createNatureChunk(forestChunk.i * CS, forestChunk.j * CS, CS, P, forestChunk.c, { lod: 1, waterLevel: P.seaLevel });
+      return lod.treeCount === 0 && lod.propCount === 0 && lod.colliders.length === 0 &&
+        lod.mesh.children.length === 1 && lod.mesh.children[0].name.startsWith('surface:');
+    })(), 'far wilderness = ground grid only');
+  check('terrain exposes a waterline material set + prop catalogue',
+    !!waterMaterials().sea && !!waterMaterials().lake && !!waterMaterials().river &&
+      waterMaterials().lake.transparent === true && waterMaterials().lake.depthWrite === false &&
+      Object.keys(PROP_TYPES).length >= 8 && Object.keys(TERRAIN_MATERIALS).length >= 10 &&
+      groundMaterial(0x40602c) === groundMaterial(0x40602c),
+    Object.keys(PROP_TYPES).join(','));
+
+  // ChunkManager must stream the planet, not the old origin rules.
+  const streamScene = { add() {}, remove() {} };
+  const noop = { loadChunk() {}, unloadChunk() {} };
+  const mgr = new ChunkManager(streamScene, null, world, traffic, noop, noop, noop, noop);
+  const seen = { city: 0, road: 0, nature: 0 };
+  for (let i = -6; i <= 6; i++) for (let j = -6; j <= 6; j++) {
+    const d = mgr.loadChunk(i, j);
+    seen[d.type] = (seen[d.type] || 0) + 1;
+  }
+  check('streaming builds city + road + nature chunks from the planet',
+    seen.city > 0 && seen.road > 0 && seen.nature > 0,
+    JSON.stringify(seen));
+  check('streaming nature chunks carry ecology (no more grey wasteland)',
+    (() => {
+      for (let i = -14; i <= 14; i++) for (let j = -14; j <= 14; j++) {
+        const cls = mgr.classify(i, j);
+        if (cls.type === 'nature' && cls.biome !== 'grassland') {
+          const d = mgr.loadChunk(i, j);
+          return d.type === 'nature' && (d.treeCount > 0 || d.propCount > 0 || cls.biome === 'ocean');
+        }
+      }
+      return false;
+    })(), 'wilderness is alive (trees/props per biome)');
+}
 
 
 // ---- ADR 0021 — bundled local build (AAA-01) --------------------------------------
@@ -1163,7 +1273,8 @@ const report = {
   tool: 'check_world',
   version: VERSION,
   systems: {
-    world: { exports: ['createWorld', 'createCityChunk', 'createWastelandChunk'] },
+    world: { exports: ['createWorld', 'createCityChunk', 'createHighwayChunk', 'addTreeToGeoms', 'mergeVegetation', 'VEGETATION_MATERIALS'] },
+    terrain: { exports: ['createNatureChunk', 'PROP_TYPES', 'TERRAIN_MATERIALS', 'waterMaterials', 'groundMaterial'], propTypes: Object.keys(PROP_TYPES) },
     traffic: { exports: ['TrafficSystem'], speeds: speedMap },
     weather: {
       exports: ['WeatherSystem'],

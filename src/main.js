@@ -171,7 +171,10 @@ async function init() {
 
         // [NEW] Road-network graph — deterministic implicit graph over the
         // chunk grid, so cars route intersection-to-intersection realistically.
-        roadGraph = new RoadGraph(worldData.blockSize, 16);
+        // [PLANET-02] It reads the planet now: cities and inter-city roads are
+        // wherever the surface model put them, not inside a radius of the origin,
+        // and nodes grow lazily as the player streams the world.
+        roadGraph = new RoadGraph(worldData.blockSize, 16, { planet: chunkManager.planet });
         window.roadGraph = roadGraph; // Machine-readable on the browser path too
 
         // [NEW] Round 9 — minimap / district-label HUD. Reads the live chunk
@@ -205,6 +208,24 @@ async function init() {
         // with draw calls recorded, the browser path is provably alive.
         window.__worldloop = { ready: false, drawCalls: 0, fps: 0, triangles: 0, errors: 0, simClock: null };
 
+        // [PLANET-02] The planet is part of the machine-readable surface: an
+        // agent (or the CI driver) can ask the running game what any place is —
+        // biome, settlement, region, population — and move the player to a place
+        // it chose, so a verification run can drive out and look at the world.
+        window.__worldloop.planet = chunkManager.planet;
+        window.__worldloop.chunkManager = chunkManager;
+        window.__worldloop.weather = weatherSystem;   // driver can set the hour of day
+        window.__worldloop.placeAt = (x, z) => {
+            const cx = Math.floor(x / chunkManager.chunkSize), cz = Math.floor(z / chunkManager.chunkSize);
+            return { chunk: [cx, cz], biome: minimap.surfaceAt(cx, cz), place: minimap.districtAt(cx, cz) };
+        };
+        window.__worldloop.teleport = (x, z) => {
+            const y = Math.max(6, chunkManager.planet.groundHeightCached(x, z) + 6);
+            player.teleport(x, z, y);
+            player.colliders = chunkManager.getCollidersNear(x, z, chunkManager.chunkSize);
+            return window.__worldloop.placeAt(x, z);
+        };
+
         console.log('Game Initialized with Infinite World + Populated Chunks');
 
 
@@ -234,7 +255,7 @@ async function init() {
         verDiv.style.background = 'rgba(0,0,0,0.5)';
         verDiv.style.padding = '5px';
         verDiv.style.fontFamily = 'monospace';
-        verDiv.innerHTML = 'v6.6.1: Parked Cars Off the Street';
+        verDiv.innerHTML = 'v6.7.0: Living Planet — biomes, oceans, forests, scattered cities';
         document.body.appendChild(verDiv);
 
         // [AAA-02] frame loop: exactly ONE update per frame, explicit clamped

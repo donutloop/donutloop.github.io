@@ -37,8 +37,9 @@ the one it replaces.
 | 0029 | Spatial broadphase — uniform-grid collider index (AAA-09) | Accepted |
 | 0030 | Streaming budget + queue + chunk pooling (AAA-10) | Accepted |
 | 0031 | Seeded planetary surface model (`src/planet.js`) | Accepted |
+| 0032 | Wilderness renderer + planet-driven streaming (`src/terrain.js`) | Accepted |
 
 Newest decisions (0021–0030) are the foundation for the AAA migration phases in
 `roadmap.md` Phase 8+; the full migration plan lives in `docs/aaa-migration-plan.md`.
-ADR 0031 opens **Phase 16 — Living Planet**: the seeded world model behind the
-biome/ocean/forest/city transformation.
+ADR 0031–0032 open **Phase 16 — Living Planet**: the seeded world model and the
+wilderness renderer behind the biome/ocean/forest/city transformation.

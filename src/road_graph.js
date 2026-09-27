@@ -18,21 +18,43 @@
  * adjacent cells whenever they share a road axis, in both directions (two-way
  * roads). Cars can therefore route intersection-to-intersection instead of
  * pure lane-following.
+ *
+ * [PLANET-02] The world is no longer one city at the origin, so the graph can
+ * no longer hard-code those rules either: pass `{ planet }` (or any
+ * `classify(cx,cz) -> {x,z}` function) and the graph reads the real surface
+ * model — cities and inter-city roads wherever the planet put them. Without it
+ * the historic origin rules stay, so the golden topology snapshot is unaffected.
+ * Nodes also grow lazily around the player via `ensure(cx,cz)`, because the road
+ * network now extends forever instead of living inside one radius.
  */
 export class RoadGraph {
-  constructor(chunkSize, radius = 16) {
+  constructor(chunkSize, radius = 16, opts = {}) {
     this.chunkSize = chunkSize;
     this.radius = radius;
     this.nodes = new Map(); // "cx,cz" -> { cx, cz, x, z, edges: [] }
+    this.maxNodes = opts.maxNodes || 6000;
+    // Planet-backed axes: any object with classifyChunk(cx,cz) works.
+    this.classify = opts.classify || (opts.planet ? (cx, cz) => {
+      const cls = opts.planet.classifyChunk(cx, cz);
+      if (cls.type === 'city') return { x: true, z: true };
+      if (cls.type === 'road') {
+        return cls.roadAxis === 'cross'
+          ? { x: true, z: true }
+          : { x: cls.roadAxis === 'x', z: cls.roadAxis === 'z' };
+      }
+      return { x: false, z: false };
+    } : null);
     this.build();
   }
 
   key(cx, cz) { return `${cx},${cz}`; }
 
   /**
-   * Deterministic road axes for a chunk cell — mirrors ChunkManager.loadChunk.
+   * Road axes for a chunk cell — the planet when we have it, otherwise the
+   * historic mirror of ChunkManager.loadChunk.
    */
   roadAxes(cx, cz) {
+    if (this.classify) return this.classify(cx, cz);
     const dist = Math.sqrt(cx * cx + cz * cz);
     const isCity = dist < 6;
     if (isCity) return { x: true, z: true };
@@ -88,6 +110,39 @@ export class RoadGraph {
     }
 
     this.centerKey = this.key(0, 0);
+  }
+
+  /**
+   * Grow the graph around a chunk (lazily, as chunks stream). Roads beyond the
+   * initial radius therefore exist as soon as the player drives near them, which
+   * is what lets cars turn at intersections in a city 3 km from the origin.
+   */
+  ensure(cx, cz, pad = 1) {
+    for (let ix = cx - pad; ix <= cx + pad; ix++) {
+      for (let iz = cz - pad; iz <= cz + pad; iz++) {
+        const key = this.key(ix, iz);
+        if (this.nodes.has(key)) continue;
+        const axes = this.roadAxes(ix, iz);
+        if (!axes.x && !axes.z) continue;
+        const node = { cx: ix, cz: iz, x: !!axes.x, z: !!axes.z, edges: [], key };
+        this.nodes.set(key, node);
+        // Link to already-known neighbours along a shared axis (two-way).
+        for (const [dx, dz, axis] of [[1, 0, 'x'], [-1, 0, 'x'], [0, 1, 'z'], [0, -1, 'z']]) {
+          const other = this.nodes.get(this.key(ix + dx, iz + dz));
+          if (other && other[axis] && node[axis]) {
+            node.edges.push({ to: other.key, axis, dir: dx || dz });
+            other.edges.push({ to: key, axis, dir: -(dx || dz) });
+          }
+        }
+      }
+    }
+    if (this.nodes.size > this.maxNodes) {
+      // Keep the graph bounded while streaming: forget and let it regrow around
+      // the player. Deterministic — the same drive visits the same cells.
+      this.nodes.clear();
+      this.build();
+    }
+    return this.nodes.size;
   }
 
   nodeCount() { return this.nodes.size; }
@@ -177,10 +232,12 @@ export class RoadGraph {
 
   /**
    * The graph node nearest to a world-space x,z position (for routing cars).
+   * Grows the graph on demand so distant roads stay routable.
    */
   nodeAtWorld(x, z) {
     const cx = Math.round(x / this.chunkSize);
     const cz = Math.round(z / this.chunkSize);
+    if (!this.nodes.has(this.key(cx, cz))) this.ensure(cx, cz);
     return this.getNode(cx, cz);
   }
 }
